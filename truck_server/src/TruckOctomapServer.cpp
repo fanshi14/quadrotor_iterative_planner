@@ -48,8 +48,6 @@ void TruckOctomapServer::publishTruckAll(const ros::Time& rostime)
 
 void TruckOctomapServer::WriteTruckOctree(Pose6D rot_mat)
 {
-  printf("Resolution is %f\n", m_res);
-
   // Truck's roof above drivers
   for (int x=-roof[0]; x<roof[0]; x++) {
     for (int y=-roof[1]; y<roof[1]; y++) {

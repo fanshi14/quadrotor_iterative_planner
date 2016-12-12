@@ -5,4 +5,5 @@
     <param name="frame_id" type="string" value="world" />
   </node>
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(find truck_server)/config/truck_octomap.rviz" />
+  <node pkg="truck_server" type="truck_octomap_flag.py" name="truck_octomap_flag" />
 </launch>
