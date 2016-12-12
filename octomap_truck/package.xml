@@ -1,0 +1,18 @@
+<package>
+  <name>octomap_truck</name>
+  <version>0.6.0</version>
+  <description>
+    3D representation tools for truck, implementing a 3D occupancy grid mapping.
+  </description>
+  <author>Shi Fan</author>
+  <maintainer email="shifan@jsk.imi.i.u-tokyo.ac.jp">Shi Fan</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <run_depend>truck_server</run_depend>
+
+  <export>
+    <metapackage/>
+  </export>
+ 
+</package>
