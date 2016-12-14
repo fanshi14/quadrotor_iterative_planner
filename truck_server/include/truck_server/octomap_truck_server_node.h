@@ -32,12 +32,20 @@ void TruckServerNode::pointQueryCallback(const geometry_msgs::Vector3ConstPtr& m
   std::cout << "query comes.\n";
   point3d query(msg->x, msg->y, msg->z);
   OcTreeNode* result = truck_.m_octree->search (query);
-  std::cout << "occupancy probability at " << query << ":\t " << result->getOccupancy() << std::endl;
+  if(result == NULL)
+    {
+      std::cout << "Unknown point" << query << std::endl;
+    }
+  else
+    {
+      std::cout << "occupancy probability at " << query << ":\t " << result->getOccupancy() << std::endl;
+      std::cout << "Logodds at " << query << ":\t " << result->getLogOdds() << std::endl << std::endl;
+    }
 }
 
 void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
 {
- truck_.WriteTruckOctree(Pose6D(0,0,0,0,0,-M_PI/4));
+ truck_.WriteTruckOctree(Pose6D(0,0,0,0,0,0));
  //truck.publishTruckFullOctoMap(ros::Time().now());
  truck_.publishTruckAll(ros::Time().now());
  usleep(1000000);

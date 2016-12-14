@@ -23,6 +23,8 @@ TruckOctomapServer::~TruckOctomapServer() {
 
 void TruckOctomapServer::init_param()
 {
+  m_octree->setResolution(m_res);
+
   //roof.assign((int)round(1.0/m_res), (int)round(1.5/m_res), (int)round(1.0/m_res));
   roof[0] = (int)round(1.0/m_res); roof[1] = (int)round(1.5/m_res); roof[2] = (int)round(1.0/m_res);
   //base.assign((int)round(2.5/m_res), (int)round(1.5/m_res), (int)round(1.5/m_res));
@@ -31,6 +33,11 @@ void TruckOctomapServer::init_param()
   cargo[0] = (int)round(1.5/m_res); cargo[1] = (int)round(1.5/m_res); cargo[2] = (int)round(0.5/m_res);
 
   step_value = (float)m_res / 2.0f;
+
+  m_octree->enableChangeDetection(true);
+
+
+  printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
 }
 
 
@@ -48,6 +55,19 @@ void TruckOctomapServer::publishTruckAll(const ros::Time& rostime)
 
 void TruckOctomapServer::WriteTruckOctree(Pose6D rot_mat)
 {
+  // insert some measurements of free cells
+  //Cargo: Truck's region above landing area
+  for (int x=-cargo[0]; x<cargo[0]; x++) {
+    for (int y=-cargo[1]; y<cargo[1]; y++) {
+      for (int z=-cargo[2]; z<cargo[2]; z++) {
+        Vector3 end_vec = rot_mat.transform(Vector3((float) x*step_value-0.5f, (float) y*step_value, (float) z*step_value+1.25f));
+        point3d endpoint (end_vec.x(), end_vec.y(), end_vec.z());
+        //m_octree->updateNode(endpoint, false);  // integrate 'free' measurement
+      }
+    }
+  }
+
+
   // Truck's roof above drivers
   for (int x=-roof[0]; x<roof[0]; x++) {
     for (int y=-roof[1]; y<roof[1]; y++) {
@@ -70,18 +90,10 @@ void TruckOctomapServer::WriteTruckOctree(Pose6D rot_mat)
     }
   }
 
+  point3d end_pt(0, 0, 0);
+  //m_octree->updateNode(end_pt, true);
+  m_octree->prune();
 
-  // insert some measurements of free cells
-  //Cargo: Truck's region above landing area
-  for (int x=-cargo[0]; x<cargo[0]; x++) {
-    for (int y=-cargo[1]; y<cargo[1]; y++) {
-      for (int z=-cargo[2]; z<cargo[2]; z++) {
-        Vector3 end_vec = rot_mat.transform(Vector3((float) x*step_value-0.5f, (float) y*step_value, (float) z*step_value+1.25f));
-        point3d endpoint (end_vec.x(), end_vec.y(), end_vec.z());
-        m_octree->updateNode(endpoint, false);  // integrate 'free' measurement
-      }
-    }
-  }
-
+  printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
 }
 
