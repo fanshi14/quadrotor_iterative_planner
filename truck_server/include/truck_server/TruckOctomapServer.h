@@ -8,6 +8,11 @@
 #include <octomap/OcTreeNode.h>
 #include <math.h>
 #include <vector>
+#include <nav_msgs/Path.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Point.h>
+#include <visualization_msgs/Marker.h>
+#include <std_msgs/Header.h>
 
 using namespace octomap_server;
 using namespace octomap;
@@ -16,13 +21,14 @@ class TruckOctomapServer: public OctomapServer {
 public:
   TruckOctomapServer();
   virtual ~TruckOctomapServer();
+  float step_value;
+  ros::Publisher pub_lane_marker;
+
   void init_param();
-  void WriteTruckOctree(Pose6D rot_mat);
+  void WriteVehicleOctree(int type, Pose6D rot_mat);
   void publishTruckFullOctoMap(const ros::Time& rostime);
   void publishTruckAll(const ros::Time& rostime);
-  //std::vector<int> roof, base, cargo;
-  int roof[3], base[3], cargo[3];
-  float step_value;
+  void laneMarkerVisualization();
 };
 
 #endif

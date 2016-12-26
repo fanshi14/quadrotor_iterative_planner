@@ -45,7 +45,13 @@ void TruckServerNode::pointQueryCallback(const geometry_msgs::Vector3ConstPtr& m
 
 void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
 {
- truck_.WriteTruckOctree(Pose6D(0,0,0,0,0,0));
+  // x,y,z,r,p,y
+  truck_.WriteVehicleOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
+  truck_.WriteVehicleOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
+  truck_.WriteVehicleOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
+  truck_.laneMarkerVisualization();
+
+  //truck_.m_octree->updateNode(point3d(-3276.8f, -3276.8f, -3276.8f), true);
  //truck.publishTruckFullOctoMap(ros::Time().now());
  truck_.publishTruckAll(ros::Time().now());
  usleep(1000000);
