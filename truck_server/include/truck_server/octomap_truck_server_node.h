@@ -68,6 +68,7 @@ void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
 void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
   ROS_INFO("QueryDepth");
   point3d query(msg->x, msg->y, msg->z);
+  std::cout << msg->x <<' ' << msg->y << ' ' << msg->z <<'\n';
   OcTreeNode* result = truck_.m_octree->search (query, 0);
   // Depth from 1 to 16
   int cur_depth = result->depth;
@@ -123,7 +124,7 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
 
   //pub_point_octocube_ = nh.advertise<visualization_msgs::Marker>("lane_marker", 10);
   pub_point_octocube_.publish(query_point_marker);
-  sleep(1.5);
+  //sleep(1.5);
   pub_point_octocube_.publish(octo_cube_marker);
 
 }
