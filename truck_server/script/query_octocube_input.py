@@ -5,6 +5,7 @@ from geometry_msgs.msg import Vector3
 import sys
 
 def talker():
+    print "[Plese input the inquery points: x y z]"
     pub = rospy.Publisher('/query_point_depth', Vector3, queue_size=10)
     rospy.init_node('query_input', anonymous=True)
     print "Press t to quit."

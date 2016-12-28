@@ -21,6 +21,7 @@ public:
   void pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void truckOctomapCallback(const std_msgs::Empty msg);
   void onInit();
+  bool getGridCenter(point3d query_point, point3d& center_point, int depth);
 };
 
 void TruckServerNode::onInit()
@@ -59,8 +60,6 @@ void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
   truck_.WriteVehicleOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
   truck_.laneMarkerVisualization();
 
-  //truck_.m_octree->updateNode(point3d(-3276.8f, -3276.8f, -3276.8f), true);
- //truck.publishTruckFullOctoMap(ros::Time().now());
  truck_.publishTruckAll(ros::Time().now());
  usleep(1000000);
 }
@@ -74,12 +73,9 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
   int cur_depth = result->depth;
   double cube_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-cur_depth);
   std::cout << "Point is " << cur_depth << "\n";
-  key_type key_x = truck_.m_octree->coordToKey(msg->x, cur_depth);
-  key_type key_y = truck_.m_octree->coordToKey(msg->y, cur_depth);
-  key_type key_z = truck_.m_octree->coordToKey(msg->z, cur_depth);
-  double center_x = truck_.m_octree->keyToCoord(key_x, cur_depth);
-  double center_y = truck_.m_octree->keyToCoord(key_y, cur_depth);
-  double center_z = truck_.m_octree->keyToCoord(key_z, cur_depth);
+  std::cout << "Prob is  " << result->getOccupancy() << "\n";
+  point3d center;
+  getGridCenter(query, center, cur_depth);
 
   visualization_msgs::Marker query_point_marker, octo_cube_marker;
   octo_cube_marker.ns = query_point_marker.ns = "octocubes";
@@ -106,10 +102,9 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
   query_point_marker.color.g = 0.0f;
   query_point_marker.color.b = 0.0f;
 
-  //
-  octo_cube_marker.pose.position.x = center_x;
-  octo_cube_marker.pose.position.y = center_y;
-  octo_cube_marker.pose.position.z = center_z;
+  octo_cube_marker.pose.position.x = center.x();
+  octo_cube_marker.pose.position.y = center.y();
+  octo_cube_marker.pose.position.z = center.z();
   octo_cube_marker.pose.orientation.x = 0.0;
   octo_cube_marker.pose.orientation.y = 0.0;
   octo_cube_marker.pose.orientation.z = 0.0;
@@ -122,9 +117,31 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
   octo_cube_marker.color.g = 0.0f;
   octo_cube_marker.color.b = 1.0f;
 
-  //pub_point_octocube_ = nh.advertise<visualization_msgs::Marker>("lane_marker", 10);
   pub_point_octocube_.publish(query_point_marker);
   //sleep(1.5);
   pub_point_octocube_.publish(octo_cube_marker);
 
+}
+
+bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, int depth)
+{
+  bool isGridFree = true;
+  if (depth == -1)
+    {
+        OcTreeNode* result = truck_.m_octree->search (query_point, 0);
+        depth = result->depth;
+        // 0.4 is free, 0.97 is occupied
+        if (result->getOccupancy() > 0.8)
+          isGridFree = false;
+    }
+  key_type key_x = truck_.m_octree->coordToKey(query_point.x(), depth);
+  key_type key_y = truck_.m_octree->coordToKey(query_point.y(), depth);
+  key_type key_z = truck_.m_octree->coordToKey(query_point.z(), depth);
+  double center_x = truck_.m_octree->keyToCoord(key_x, depth);
+  double center_y = truck_.m_octree->keyToCoord(key_y, depth);
+  double center_z = truck_.m_octree->keyToCoord(key_z, depth);
+  center_point.x() = center_x;
+  center_point.y() = center_y;
+  center_point.z() = center_z;
+  return isGridFree;
 }
