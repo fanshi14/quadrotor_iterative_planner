@@ -7,6 +7,14 @@
 
 using namespace octomap_server;
 
+struct aStarDataType
+{
+  point3d pos;
+  double g_val;
+  double h_val;
+  double f_val;
+};
+
 class TruckServerNode
 {
 public:
@@ -16,12 +24,16 @@ public:
   ros::Subscriber sub_point_depth_query_;
   ros::Publisher pub_point_octocube_;
 
+  std::vector<aStarDataType> points_open_set, points_close_set;
+
   TruckOctomapServer truck_;
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void truckOctomapCallback(const std_msgs::Empty msg);
   void onInit();
+  // return true if the grid is free
   bool getGridCenter(point3d query_point, point3d& center_point, int depth);
+  void aStarSearch(point3d start_point, point3d end_point);
 };
 
 void TruckServerNode::onInit()
@@ -126,6 +138,7 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
 bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, int depth)
 {
   bool isGridFree = true;
+  // when not have prior knowledge of depth, assign depth as -1
   if (depth == -1)
     {
         OcTreeNode* result = truck_.m_octree->search (query_point, 0);
@@ -144,4 +157,30 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
   center_point.y() = center_y;
   center_point.z() = center_z;
   return isGridFree;
+}
+
+void TruckServerNode::aStarSearch(point3d start_point, point3d end_point)
+{
+  OcTreeNode* start_node = truck_.m_octree->search (start_point, 0);
+  int start_node_depth = start_node->depth;
+  double start_grid_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-start_node_depth);
+  double neighbor_grid_gap = start_grid_size + truck_.m_octree->resolution/2.0;
+  for (int x = -1; x <= 1; ++x)
+    for (int y = -1; y <= 1; ++y)
+      for (int z = -1; z <= 1; ++z)
+        {
+          point3d neighbor_center_point;
+          if (getGridCenter((start_point + point3d(neighbor_grid_gap*x,
+                                                   neighbor_grid_gap*y,
+                                                   neighbor_grid_gap*z)),
+                            neighbor_center_point, -1))
+            {
+              aStarDataType new_node_data;
+              new_node_data.pos = neighbor_center_point;
+              new_node_data.g_val = start_point.distance(neighbor_center_point);
+              new_node_data.h_val = neighbor_center_point.distance(end_point);
+              new_node_data.f_val = new_node_data.g_val + new_node_data.h_val;
+              points_open_set.push_back(new_node_data);
+            }
+        }
 }
