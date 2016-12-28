@@ -4,6 +4,7 @@
 #include <geometry_msgs/Vector3.h>
 #include <std_msgs/Empty.h>
 #include <iostream>
+#include <queue>
 
 using namespace octomap_server;
 
@@ -13,6 +14,12 @@ struct aStarDataType
   double g_val;
   double h_val;
   double f_val;
+  point3d previous_pos;
+};
+struct aStarComparator {
+  bool operator()(aStarDataType i, aStarDataType j) {
+    return i.f_val > j.f_val;
+  }
 };
 
 class TruckServerNode
@@ -24,7 +31,9 @@ public:
   ros::Subscriber sub_point_depth_query_;
   ros::Publisher pub_point_octocube_;
 
-  std::vector<aStarDataType> points_open_set, points_close_set;
+  std::vector<aStarDataType> open_set_vec, close_set_vec;
+  //std::priority_queue<aStarDataType, std::vector<aStarDataType>, aStarComparator> open_set_heap, close_set_heap;
+
 
   TruckOctomapServer truck_;
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
@@ -33,7 +42,11 @@ public:
   void onInit();
   // return true if the grid is free
   bool getGridCenter(point3d query_point, point3d& center_point, int depth);
-  void aStarSearch(point3d start_point, point3d end_point);
+  void aStarSearchInit(point3d start_point, point3d end_point);
+  void aStarSearch(point3d init_point, point3d end_point);
+  std::vector<aStarDataType>::iterator getPosItearator(double f_val, char ch);
+  bool nodeInCloseSet(aStarDataType node);
+  bool nodeInOpenSet(aStarDataType node, double& same_node_f_val, std::vector<aStarDataType>::iterator& it_pos);
 };
 
 void TruckServerNode::onInit()
@@ -159,7 +172,7 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
   return isGridFree;
 }
 
-void TruckServerNode::aStarSearch(point3d start_point, point3d end_point)
+void TruckServerNode::aStarSearchInit(point3d start_point, point3d end_point)
 {
   OcTreeNode* start_node = truck_.m_octree->search (start_point, 0);
   int start_node_depth = start_node->depth;
@@ -175,12 +188,116 @@ void TruckServerNode::aStarSearch(point3d start_point, point3d end_point)
                                                    neighbor_grid_gap*z)),
                             neighbor_center_point, -1))
             {
-              aStarDataType new_node_data;
-              new_node_data.pos = neighbor_center_point;
-              new_node_data.g_val = start_point.distance(neighbor_center_point);
-              new_node_data.h_val = neighbor_center_point.distance(end_point);
-              new_node_data.f_val = new_node_data.g_val + new_node_data.h_val;
-              points_open_set.push_back(new_node_data);
+              aStarDataType new_astar_node;
+              new_astar_node.previous_pos = start_point;
+              new_astar_node.pos = neighbor_center_point;
+              new_astar_node.g_val = start_point.distance(neighbor_center_point);
+              new_astar_node.h_val = neighbor_center_point.distance(end_point);
+              new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
+              open_set_vec.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
             }
         }
+}
+
+
+void TruckServerNode::aStarSearch(point3d init_point, point3d land_point)
+{
+  aStarSearchInit(init_point, land_point);
+  point3d end_point;
+  getGridCenter(land_point, end_point, -1);
+
+  while (!open_set_vec.empty())
+    {
+      // Pop first element in open set, and push into close set
+      aStarDataType start_astar_node = open_set_vec[0];
+      point3d start_point = start_astar_node.pos;
+      double start_node_g_val = start_astar_node.g_val;
+      open_set_vec.erase(open_set_vec.begin());
+      close_set_vec.insert(getPosItearator(start_astar_node.f_val, 'c'), start_astar_node);
+
+      OcTreeNode* start_octree_node = truck_.m_octree->search (start_point, 0);
+      int start_octree_node_depth = start_octree_node->depth;
+      double start_grid_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-start_octree_node_depth);
+      double neighbor_grid_gap = start_grid_size + truck_.m_octree->resolution/2.0;
+      for (int x = -1; x <= 1; ++x)
+        for (int y = -1; y <= 1; ++y)
+          for (int z = -1; z <= 1; ++z)
+            {
+              point3d neighbor_center_point;
+              if (getGridCenter((start_point + point3d(neighbor_grid_gap*x,
+                                                       neighbor_grid_gap*y,
+                                                       neighbor_grid_gap*z)),
+                                neighbor_center_point, -1)
+                  and !nodeInCloseSet(start_astar_node))
+                {
+                  aStarDataType new_astar_node;
+                  new_astar_node.previous_pos = start_point;
+                  new_astar_node.pos = neighbor_center_point;
+                  new_astar_node.g_val = start_node_g_val + start_point.distance(neighbor_center_point);
+                  new_astar_node.h_val = neighbor_center_point.distance(end_point);
+                  new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
+                  double same_node_f_val;
+                  std::vector<aStarDataType>::iterator it_pos;
+                  if (!nodeInOpenSet(new_astar_node, same_node_f_val, it_pos))
+                    open_set_vec.insert(it_pos, new_astar_node);
+                  else if (new_astar_node.f_val < same_node_f_val)
+                    *it_pos = new_astar_node;
+                }
+            }
+    }
+}
+
+std::vector<aStarDataType>::iterator TruckServerNode::getPosItearator(double f_val, char ch)
+{
+  if (ch == 'o'){
+    std::vector<aStarDataType>::iterator it = open_set_vec.begin();
+    while (it != open_set_vec.end()){
+      if (f_val > it->f_val) ++it;
+      else break;
+    }
+    return it;
+  }
+  else if (ch == 'c'){
+    std::vector<aStarDataType>::iterator it = close_set_vec.begin();
+    while (it != close_set_vec.end()){
+      if (f_val > it->f_val) ++it;
+      else break;
+    }
+    return it;
+  }
+}
+
+bool TruckServerNode::nodeInCloseSet(aStarDataType node)
+{
+  std::vector<aStarDataType>::iterator it = close_set_vec.begin();
+  while (it != close_set_vec.end()){
+    if (!(node.pos == it->pos)) ++it;
+    else return true;
+  }
+  return false;
+}
+
+bool TruckServerNode::nodeInOpenSet(aStarDataType node, double& same_node_f_val, std::vector<aStarDataType>::iterator& it_pos)
+{
+  bool posFind = false;
+  std::vector<aStarDataType>::iterator it = open_set_vec.begin();
+  while (it != open_set_vec.end()){
+    if (!(node.pos == it->pos))
+      {
+        if (node.f_val < it->f_val and !posFind)
+          {
+            posFind = true;
+            it_pos = it;
+          }
+        ++it;
+      }
+    else{
+      it_pos = it;
+      same_node_f_val = it->f_val;
+      return true;
+    }
+  }
+  if (!posFind)
+    it_pos = it;
+  return false;
 }
