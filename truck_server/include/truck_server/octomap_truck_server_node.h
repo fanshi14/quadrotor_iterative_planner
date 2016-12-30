@@ -79,7 +79,7 @@ void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3Con
   OcTreeNode* result = truck_.m_octree->search (query);
   if(result == NULL)
     {
-      std::cout << "Unknown point" << query << std::endl;
+      std::cout << "Free/Unknown point" << query << std::endl;
     }
   else
     {
@@ -113,12 +113,15 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
   ROS_INFO("QueryDepth");
   point3d query(msg->x, msg->y, msg->z);
   std::cout << msg->x <<' ' << msg->y << ' ' << msg->z <<'\n';
-  OcTreeNode* result = truck_.m_octree->search (query, 0);
   // Depth from 1 to 16
-  int cur_depth = result->depth;
+  int cur_depth;
+  OcTreeNode* result = truck_.m_octree->searchReturnDepth (query, 0, cur_depth);
   double cube_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-cur_depth);
   std::cout << "Point is " << cur_depth << "\n";
-  std::cout << "Prob is  " << result->getOccupancy() << "\n";
+  if (result == NULL)
+    std::cout << "Unknown/free region.\n";
+  else
+    std::cout << "Prob is  " << result->getOccupancy() << "\n";
   point3d center;
   getGridCenter(query, center, cur_depth);
 
@@ -181,10 +184,14 @@ void TruckServerNode::reconstructedPathDisplay(){
   octo_cube_marker.type = visualization_msgs::Marker::CUBE;
   center_point_marker.type = visualization_msgs::Marker::SPHERE;
   for (int i = points_num-1; i >=0 ; --i){
-    OcTreeNode* result = truck_.m_octree->search (astar_path_vec_[i], 0);
-    int cur_depth = result->depth;
+    int cur_depth;
+    OcTreeNode* result = truck_.m_octree->searchReturnDepth(astar_path_vec_[i], 0, cur_depth);
     double cube_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-cur_depth);
-    std::cout << "Prob is  " << result->getOccupancy() << "\n";
+    if (result == NULL)
+      std::cout << "Unknown/free region.\n";
+    else
+      std::cout << "Prob is  " << result->getOccupancy() << "\n";
+
     //point3d center;
     //getGridCenter(query, center, cur_depth);
 
@@ -233,11 +240,9 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
   // when not have prior knowledge of depth, assign depth as -1
   if (depth == -1)
     {
-        OcTreeNode* result = truck_.m_octree->search (query_point, 0);
-        depth = result->depth;
-        // 0.4 is free, 0.97 is occupied
-        if (result->getOccupancy() > 0.8)
-          isGridFree = false;
+      OcTreeNode* result = truck_.m_octree->searchReturnDepth(query_point, 0, depth);
+      if (result != NULL)
+        isGridFree = false;
     }
   key_type key_x = truck_.m_octree->coordToKey(query_point.x(), depth);
   key_type key_y = truck_.m_octree->coordToKey(query_point.y(), depth);
@@ -254,10 +259,14 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 void TruckServerNode::aStarSearchInit(point3d init_point, point3d end_point)
 {
   data_set_num_ = 0;
+  data_set_vec_.clear();
+  open_set_vec_.clear();
+  close_set_vec_.clear();
+
   point3d start_point;
   getGridCenter(init_point, start_point, -1);
-  OcTreeNode* start_node = truck_.m_octree->search (start_point, 0);
-  int start_node_depth = start_node->depth;
+  int start_node_depth;
+  truck_.m_octree->searchReturnDepth(start_point, 0, start_node_depth);
   double start_grid_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-start_node_depth);
   double neighbor_grid_gap = start_grid_size + truck_.m_octree->resolution/2.0;
   for (int x = -1; x <= 1; ++x)
@@ -308,8 +317,8 @@ void TruckServerNode::aStarSearch(point3d init_point, point3d land_point)
       close_set_vec_.insert(getPosItearator(start_astar_node.f_val, 'c'), start_astar_node);
       open_set_vec_.erase(open_set_vec_.begin());
 
-      OcTreeNode* start_octree_node = truck_.m_octree->search (start_point, 0);
-      int start_octree_node_depth = start_octree_node->depth;
+      int start_octree_node_depth;
+      truck_.m_octree->searchReturnDepth(start_point, 0, start_octree_node_depth);
       double start_grid_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-start_octree_node_depth);
       double neighbor_grid_gap = start_grid_size + truck_.m_octree->resolution/2.0;
       for (int x = -1; x <= 1; ++x)
