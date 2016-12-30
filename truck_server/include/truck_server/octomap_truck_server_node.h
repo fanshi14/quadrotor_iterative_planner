@@ -55,7 +55,7 @@ public:
   bool nodeInCloseSet(aStarDataType& node);
   bool nodeInOpenSet(aStarDataType& node);
   void reconstructPath(int end_id);
-  void reconstructedPathDisplay();
+  void reconstructedPathDisplay(int mode); // mode: 1, add display; -1, delete display
 };
 
 void TruckServerNode::onInit()
@@ -102,14 +102,14 @@ void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
 
 void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
   ROS_INFO("AstarPathQuery");
+  // If alredy have diplay, delete previous display first.
+  if (astar_path_vec_.size() > 0)
+    reconstructedPathDisplay(-1);
   init_point = point3d(msg->x, msg->y, msg->z);
   land_point = point3d(-0.5, 0, 1.3);
-  //test
-  //aStarSearchInit();
   aStarSearch();
-
   ROS_INFO("Search finished");
-  reconstructedPathDisplay();
+  reconstructedPathDisplay(1);
   ROS_INFO("Display finished");
 }
 
@@ -175,7 +175,7 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
 
 }
 
-void TruckServerNode::reconstructedPathDisplay(){
+void TruckServerNode::reconstructedPathDisplay(int mode){
   int points_num = astar_path_vec_.size();
   std::cout << "[Display] points number: " << points_num << "\n";
   int id_cnt = 0;
@@ -184,7 +184,10 @@ void TruckServerNode::reconstructedPathDisplay(){
   octo_cube_marker.ns = center_point_marker.ns = arrow_marker.ns = "pathcubes";
   octo_cube_marker.header.frame_id = center_point_marker.header.frame_id = arrow_marker.header.frame_id = std::string("/world");
   octo_cube_marker.header.stamp = center_point_marker.header.stamp = arrow_marker.header.stamp = ros::Time().now();
-  octo_cube_marker.action = center_point_marker.action = arrow_marker.action = visualization_msgs::Marker::ADD;
+  if (mode == 1)
+    octo_cube_marker.action = center_point_marker.action = arrow_marker.action = visualization_msgs::Marker::ADD;
+  else
+    octo_cube_marker.action = center_point_marker.action = arrow_marker.action = visualization_msgs::Marker::DELETE;
   octo_cube_marker.type = visualization_msgs::Marker::CUBE;
   center_point_marker.type = visualization_msgs::Marker::SPHERE;
   arrow_marker.type = visualization_msgs::Marker::ARROW;
