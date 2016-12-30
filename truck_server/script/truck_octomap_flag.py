@@ -9,14 +9,16 @@ def talker():
     pub = rospy.Publisher('/truck_octomap_flag', Empty, queue_size=1)
     rospy.init_node('truck_octomap_flag', anonymous=True)
     cnt = 0
-    time.sleep(1.3)
-    while not rospy.is_shutdown():
-        if cnt > 3:
-            break
-        cnt += 1
-        flag = Empty()
-        pub.publish(flag)
-        time.sleep(1)
+    time.sleep(2.5)
+    flag = Empty()
+    pub.publish(flag)
+    # while not rospy.is_shutdown():
+    #     if cnt > 3:
+    #         break
+    #     cnt += 1
+    #     flag = Empty()
+    #     pub.publish(flag)
+    #     time.sleep(1)
 
 
 if __name__ == '__main__':
