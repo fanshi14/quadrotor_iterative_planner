@@ -51,6 +51,9 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
   int roof[3], base[3], cargo[3];
   float roof_offset[3], base_offset[3], cargo_offset[3];
   float roof_size[3], base_size[3], cargo_size[3];
+  // For uav safety margin
+  //float uav_safety_margin_size[3] = {0.6f, 0.6f, 0.2f}, uav_safety_margin[3];
+
   // truck for challenge
   if (type == 0)
     {
@@ -77,6 +80,11 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
     base[i] = (int)round(base_size[i]/m_res);
     roof[i] = (int)round(roof_size[i]/m_res);
     cargo[i] = (int)round(cargo_size[i]/m_res);
+    // For uav safety margin
+    // uav_safety_margin[i] = (int)round(uav_safety_margin_size[i]/m_res);
+    // base[i] += 2*uav_safety_margin[i];
+    // roof[i] += 2*uav_safety_margin[i];
+    // cargo[i] += 2*uav_safety_margin[i];
   }
   base_offset[0] = 0.0f; base_offset[1] = 0.0f; base_offset[2] = base_size[2]/2.0f;
   // sedan's roof is in the middle
@@ -130,6 +138,7 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
 
   point3d end_pt(0, 0, 0);
   //m_octree->updateNode(end_pt, true);
+  m_octree->prune();
   m_octree->prune();
 
   printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
@@ -190,9 +199,9 @@ void TruckOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
   if (cargo_size[0] > 0.1){
     for (int x=-cargo[0]-uav_safety_margin[0]*2; x<=cargo[0]+uav_safety_margin[0]*2; ++x) {
       for (int y=-cargo[1]-uav_safety_margin[1]*2; y<=cargo[1]+uav_safety_margin[1]*2; ++y) {
-        if (x <= cargo[0] && x >= -cargo[0] && y <= cargo[1] && y >= -cargo[1] )
-          continue;
         for (int z=-cargo[2]; z<cargo[2]+uav_safety_margin[2]*2; ++z) {
+          if (x <= cargo[0] && x >= -cargo[0] && y <= cargo[1] && y >= -cargo[1] && z <= cargo[2] )
+            continue;
           Vector3 end_vec = rot_mat.transform(Vector3((float) x*step_value+cargo_offset[0], (float) y*step_value+cargo_offset[1], (float) z*step_value+cargo_offset[2]));
           point3d endpoint (end_vec.x(), end_vec.y(), end_vec.z());
           m_octree->updateNode(endpoint, true);
@@ -205,9 +214,9 @@ void TruckOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
   // Truck's roof above drivers
   for (int x=-roof[0]-uav_safety_margin[0]*2; x<roof[0]+uav_safety_margin[0]*2; ++x) {
     for (int y=-roof[1]-uav_safety_margin[1]*2; y<roof[1]+uav_safety_margin[1]*2; ++y) {
-      if (x <= roof[0] && x >= -roof[0] && y <= roof[1] && y >= -roof[1] )
-        continue;
       for (int z=-roof[2]; z<roof[2]+uav_safety_margin[2]*2; ++z) {
+        if (x <= roof[0] && x >= -roof[0] && y <= roof[1] && y >= -roof[1] && z <= roof[2])
+          continue;
         Vector3 end_vec = rot_mat.transform(Vector3((float) x*step_value+roof_offset[0], (float) y*step_value+roof_offset[1], (float) z*step_value+roof_offset[2]));
         point3d endpoint (end_vec.x(), end_vec.y(), end_vec.z());
         m_octree->updateNode(endpoint, true);
@@ -218,9 +227,9 @@ void TruckOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
   // Truck's whole base
   for (int x=-base[0]-uav_safety_margin[0]*2; x<=base[0]+uav_safety_margin[0]*2; ++x) {
     for (int y=-base[1]-uav_safety_margin[1]*2; y<=base[1]+uav_safety_margin[1]*2; ++y) {
-      if (x <= base[0] && x >= -base[0] && y <= base[1] && y >= -base[1] )
-        continue;
       for (int z=-base[2]; z<base[2]+uav_safety_margin[2]*2; ++z) {
+        if (x <= base[0] && x >= -base[0] && y <= base[1] && y >= -base[1] && z <= base[2])
+          continue;
         Vector3 end_vec = rot_mat.transform(Vector3((float) x*step_value+base_offset[0], (float) y*step_value+base_offset[1], (float) z*step_value+base_offset[2]));
         point3d endpoint (end_vec.x(), end_vec.y(), end_vec.z());
         m_octree->updateNode(endpoint, true);
@@ -230,6 +239,7 @@ void TruckOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
 
   point3d end_pt(0, 0, 0);
   //m_octree->updateNode(end_pt, true);
+  m_octree->prune();
   m_octree->prune();
 
   printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
