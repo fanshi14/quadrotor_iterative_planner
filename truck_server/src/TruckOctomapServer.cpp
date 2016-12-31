@@ -46,6 +46,7 @@ void TruckOctomapServer::publishTruckAll(const ros::Time& rostime)
   this->publishAll(rostime);
 }
 
+//todo rotation bug
 void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
 {
   int roof[3], base[3], cargo[3];

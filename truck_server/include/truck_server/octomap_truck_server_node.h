@@ -90,10 +90,12 @@ void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3Con
 
 void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
 {
+  double rot_deg = 0;
+  double rot_ang = rot_deg * 3.1415926 / 360.0;
   // x,y,z,r,p,y
-  truck_.WriteVehicleOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
-  truck_.WriteVehicleOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
-  truck_.WriteVehicleOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
+  truck_.WriteVehicleOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
+  truck_.WriteVehicleOctree(1, Pose6D(0.0f, 3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
+  truck_.WriteVehicleOctree(2, Pose6D(0.0f, -3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
   truck_.laneMarkerVisualization();
 
   // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
