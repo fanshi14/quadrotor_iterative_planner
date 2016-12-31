@@ -26,7 +26,7 @@ public:
 
   void init_param();
   void WriteVehicleOctree(int type, Pose6D rot_mat);
-  //void WriteUavSafeBorderOctree(int type, Pose6D rot_mat);
+  void WriteUavSafeBorderOctree(int type, Pose6D rot_mat);
   void publishTruckFullOctoMap(const ros::Time& rostime);
   void publishTruckAll(const ros::Time& rostime);
   void laneMarkerVisualization();
