@@ -50,36 +50,48 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
 {
   int roof[3], base[3], cargo[3];
   float roof_offset[3], base_offset[3], cargo_offset[3];
+  float roof_size[3], base_size[3], cargo_size[3];
   // truck for challenge
   if (type == 0)
     {
-      roof[0] = (int)round(1.0/m_res); roof[1] = (int)round(1.5/m_res); roof[2] = (int)round(1.0/m_res);
-      base[0] = (int)round(2.5/m_res); base[1] = (int)round(1.5/m_res); base[2] = (int)round(1.0/m_res);
-      cargo[0] = 0; cargo[1] = 0; cargo[2] = 0;
-      roof_offset[0] = 0.75f; roof_offset[1] = 0.0f; roof_offset[2] = 1.5f;
-      base_offset[0] = 0.0f; base_offset[1] = 0.0f; base_offset[2] = 0.5f;
-      cargo_offset[0] = 0.0f; cargo_offset[1] = 0.0f; cargo_offset[2] = 0.0f;
+      base_size[0] = 3.5f; base_size[1] = 1.5f; base_size[2] = 0.7f;
+      roof_size[0] = 1.5f; roof_size[1] = 1.5f; roof_size[2] = 1.0f;
+      cargo_size[0] = 0.0f; cargo_size[1] = 0.0f; cargo_size[2] = 0.0f;
     }
   // sedan vehicle
   else if (type == 1)
     {
-      roof[0] = (int)round(2.4/m_res); roof[1] = (int)round(2.0/m_res); roof[2] = (int)round(0.8/m_res);
-      base[0] = (int)round(4.8/m_res); base[1] = (int)round(2.0/m_res); base[2] = (int)round(0.8/m_res);
-      cargo[0] = 0; cargo[1] = 0; cargo[2] = 0;
-      roof_offset[0] = 0.0f; roof_offset[1] = 0.0f; roof_offset[2] = 1.2f;
-      base_offset[0] = 0.0f; base_offset[1] = 0.0f; base_offset[2] = 0.4f;
-      cargo_offset[0] = 0.0f; cargo_offset[1] = 0.0f; cargo_offset[2] = 0.0f;
+      base_size[0] = 4.8f; base_size[1] = 2.0f; base_size[2] = 0.8f;
+      roof_size[0] = 2.4f; roof_size[1] = 2.0f; roof_size[2] = 0.9f;
+      cargo_size[0] = 0.0f; cargo_size[1] = 0.0f; cargo_size[2] = 0.0f;
     }
   // big truck
   else if (type == 2)
     {
-      roof[0] = (int)round(2.0/m_res); roof[1] = (int)round(2.4/m_res); roof[2] = (int)round(1.2/m_res);
-      base[0] = (int)round(10.0/m_res); base[1] = (int)round(2.4/m_res); base[2] = (int)round(1.4/m_res);
-      cargo[0] = (int)round(7.4/m_res); cargo[1] = (int)round(2.4/m_res); cargo[2] = (int)round(3.0/m_res);
-      roof_offset[0] = 4.0f; roof_offset[1] = 0.0f; roof_offset[2] = 2.0f;
-      base_offset[0] = 0.0f; base_offset[1] = 0.0f; base_offset[2] = 0.7f;
-      cargo_offset[0] = -1.3f; cargo_offset[1] = 0.0f; cargo_offset[2] = 2.9f;
+      base_size[0] = 10.0f; base_size[1] = 2.4f; base_size[2] = 1.4f;
+      roof_size[0] = 2.0f; roof_size[1] = 2.4f; roof_size[2] = 1.2f;
+      cargo_size[0] = 7.4f; cargo_size[1] = 2.4f; cargo_size[2] = 3.0f;
     }
+
+  for (int i = 0; i < 3; ++i){
+    base[i] = (int)round(base_size[i]/m_res);
+    roof[i] = (int)round(roof_size[i]/m_res);
+    cargo[i] = (int)round(cargo_size[i]/m_res);
+  }
+  base_offset[0] = 0.0f; base_offset[1] = 0.0f; base_offset[2] = base_size[2]/2.0f;
+  // sedan's roof is in the middle
+  if (type == 1)
+    roof_offset[0] = 0.0f;
+  else
+    roof_offset[0] = (base_size[0]-roof_size[0])/2.0f;
+  roof_offset[1] = 0.0f; roof_offset[2] = base_size[2]+roof_size[2]/2.0f;
+  // No cargo
+  if (cargo_size[0] < 0.1){
+    cargo_offset[0] = 0.0f; cargo_offset[1] = 0.0f; cargo_offset[2] = 0.0f;
+  }
+  else{
+    cargo_offset[0] = (cargo_size[0]-base_size[0])/2.0f; cargo_offset[1] = 0.0f; cargo_offset[2] = base_size[2]+cargo_size[2]/2.0f;
+  }
 
   // insert some measurements of free cells
   //Cargo: Truck's region above landing area
@@ -122,6 +134,7 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
 
   printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
 }
+
 
 
 void TruckOctomapServer::laneMarkerVisualization()
