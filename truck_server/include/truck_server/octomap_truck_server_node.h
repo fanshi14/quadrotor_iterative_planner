@@ -2,6 +2,7 @@
 #include <truck_server/TruckOctomapServer.h>
 #include <unistd.h>
 #include <geometry_msgs/Vector3.h>
+#include <geometry_msgs/Point.h>
 #include <std_msgs/Empty.h>
 #include <iostream>
 #include <visualization_msgs/Marker.h>
@@ -38,8 +39,7 @@ public:
   std::vector<aStarDataType> open_set_vec_, close_set_vec_, data_set_vec_;
   int data_set_num_;
   std::vector<point3d> astar_path_vec_;
-  //std::priority_queue<aStarDataType, std::vector<aStarDataType>, aStarComparator> open_set_heap, close_set_heap;
-
+  point3d init_point, land_point;
 
   TruckOctomapServer truck_;
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
@@ -49,13 +49,13 @@ public:
   void onInit();
   // return true if the grid is free
   bool getGridCenter(point3d query_point, point3d& center_point, int depth);
-  void aStarSearchInit(point3d start_point, point3d end_point);
-  void aStarSearch(point3d init_point, point3d end_point);
+  void aStarSearchInit();
+  bool aStarSearch();
   std::vector<aStarDataType>::iterator getPosItearator(double f_val, char ch);
-  bool nodeInCloseSet(point3d node);
-  bool nodeInOpenSet(aStarDataType node, double& same_node_f_val, std::vector<aStarDataType>::iterator& it_pos);
+  bool nodeInCloseSet(aStarDataType& node);
+  bool nodeInOpenSet(aStarDataType& node);
   void reconstructPath(int end_id);
-  void reconstructedPathDisplay();
+  void reconstructedPathDisplay(int mode); // mode: 1, add display; -1, delete display
 };
 
 void TruckServerNode::onInit()
@@ -79,7 +79,7 @@ void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3Con
   OcTreeNode* result = truck_.m_octree->search (query);
   if(result == NULL)
     {
-      std::cout << "Unknown point" << query << std::endl;
+      std::cout << "Free/Unknown point" << query << std::endl;
     }
   else
     {
@@ -90,11 +90,17 @@ void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3Con
 
 void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
 {
+  double rot_deg = 0;
+  double rot_ang = rot_deg * 3.1415926 / 360.0;
   // x,y,z,r,p,y
-  truck_.WriteVehicleOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
-  truck_.WriteVehicleOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
-  truck_.WriteVehicleOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
+  truck_.WriteVehicleOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
+  truck_.WriteVehicleOctree(1, Pose6D(0.0f, 3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
+  truck_.WriteVehicleOctree(2, Pose6D(0.0f, -3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
   truck_.laneMarkerVisualization();
+
+  // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
+  // truck_.WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
+  // truck_.WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
 
   truck_.publishTruckAll(ros::Time().now());
   usleep(1000000);
@@ -102,23 +108,30 @@ void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
 
 void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
   ROS_INFO("AstarPathQuery");
-  point3d query(msg->x, msg->y, msg->z);
-  aStarSearch(query, point3d(0, -0.5, 1.2));
-  std::cout << "Search finished.\n";
-  reconstructedPathDisplay();
-  std::cout << "Display finished.\n";
+  // If alredy have diplay, delete previous display first.
+  if (astar_path_vec_.size() > 0)
+    reconstructedPathDisplay(-1);
+  init_point = point3d(msg->x, msg->y, msg->z);
+  land_point = point3d(-0.5, 0, 1.3);
+  aStarSearch();
+  ROS_INFO("Search finished");
+  reconstructedPathDisplay(1);
+  ROS_INFO("Display finished");
 }
 
 void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
   ROS_INFO("QueryDepth");
   point3d query(msg->x, msg->y, msg->z);
   std::cout << msg->x <<' ' << msg->y << ' ' << msg->z <<'\n';
-  OcTreeNode* result = truck_.m_octree->search (query, 0);
   // Depth from 1 to 16
-  int cur_depth = result->depth;
+  int cur_depth;
+  OcTreeNode* result = truck_.m_octree->searchReturnDepth (query, 0, cur_depth);
   double cube_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-cur_depth);
   std::cout << "Point is " << cur_depth << "\n";
-  std::cout << "Prob is  " << result->getOccupancy() << "\n";
+  if (result == NULL)
+    std::cout << "Unknown/free region.\n";
+  else
+    std::cout << "Prob is  " << result->getOccupancy() << "\n";
   point3d center;
   getGridCenter(query, center, cur_depth);
 
@@ -168,25 +181,54 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
 
 }
 
-void TruckServerNode::reconstructedPathDisplay(){
+void TruckServerNode::reconstructedPathDisplay(int mode){
   int points_num = astar_path_vec_.size();
   std::cout << "[Display] points number: " << points_num << "\n";
   int id_cnt = 0;
   visualization_msgs::MarkerArray path_markers;
-  visualization_msgs::Marker center_point_marker, octo_cube_marker;
-  octo_cube_marker.ns = center_point_marker.ns = "pathcubes";
-  octo_cube_marker.header.frame_id = center_point_marker.header.frame_id = std::string("/world");
-  octo_cube_marker.header.stamp = center_point_marker.header.stamp = ros::Time().now();
-  octo_cube_marker.action = center_point_marker.action = visualization_msgs::Marker::ADD;
+  visualization_msgs::Marker center_point_marker, octo_cube_marker, arrow_marker;
+  octo_cube_marker.ns = center_point_marker.ns = arrow_marker.ns = "pathcubes";
+  octo_cube_marker.header.frame_id = center_point_marker.header.frame_id = arrow_marker.header.frame_id = std::string("/world");
+  octo_cube_marker.header.stamp = center_point_marker.header.stamp = arrow_marker.header.stamp = ros::Time().now();
+  if (mode == 1)
+    octo_cube_marker.action = center_point_marker.action = arrow_marker.action = visualization_msgs::Marker::ADD;
+  else
+    octo_cube_marker.action = center_point_marker.action = arrow_marker.action = visualization_msgs::Marker::DELETE;
   octo_cube_marker.type = visualization_msgs::Marker::CUBE;
   center_point_marker.type = visualization_msgs::Marker::SPHERE;
+  arrow_marker.type = visualization_msgs::Marker::ARROW;
   for (int i = points_num-1; i >=0 ; --i){
-    OcTreeNode* result = truck_.m_octree->search (astar_path_vec_[i], 0);
-    int cur_depth = result->depth;
+    int cur_depth;
+    truck_.m_octree->searchReturnDepth(astar_path_vec_[i], 0, cur_depth);
     double cube_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-cur_depth);
-    std::cout << "Prob is  " << result->getOccupancy() << "\n";
-    //point3d center;
-    //getGridCenter(query, center, cur_depth);
+    // if (result == NULL)
+    //   std::cout << "Unknown/free region.\n";
+    // else
+    //   std::cout << "Prob is  " << result->getOccupancy() << "\n";
+
+    if (i >= 1){
+      arrow_marker.id = id_cnt;
+      ++id_cnt;
+      geometry_msgs::Point s_pt, e_pt;
+      s_pt.x = astar_path_vec_[i-1].x();
+      s_pt.y = astar_path_vec_[i-1].y();
+      s_pt.z = astar_path_vec_[i-1].z();
+      e_pt.x = astar_path_vec_[i].x();
+      e_pt.y = astar_path_vec_[i].y();
+      e_pt.z = astar_path_vec_[i].z();
+      arrow_marker.points.clear();
+      arrow_marker.points.push_back(s_pt);
+      arrow_marker.points.push_back(e_pt);
+      //scale.x is the shaft diameter, and scale.y is the head diameter. scale.z is the head length.
+      arrow_marker.scale.x = 0.05;
+      arrow_marker.scale.y = 0.2;
+      arrow_marker.scale.z = 0.07;
+      arrow_marker.color.a = 1;
+      arrow_marker.color.r = 0.0f;
+      arrow_marker.color.g = 0.0f;
+      arrow_marker.color.b = 1.0f;
+      path_markers.markers.push_back(arrow_marker);
+    }
 
     center_point_marker.id = id_cnt;
     ++id_cnt;
@@ -197,14 +239,27 @@ void TruckServerNode::reconstructedPathDisplay(){
     center_point_marker.pose.orientation.y = 0.0;
     center_point_marker.pose.orientation.z = 0.0;
     center_point_marker.pose.orientation.w = 1.0;
-    center_point_marker.scale.x = 0.05;
-    center_point_marker.scale.y = 0.05;
-    center_point_marker.scale.z = 0.05;
-    center_point_marker.color.a = 0.6;
-    center_point_marker.color.r = 1.0f;
-    center_point_marker.color.g = 0.0f;
-    center_point_marker.color.b = 0.0f;
-    path_markers.markers.push_back(center_point_marker);
+    if (i == 0 || i == points_num-1){
+      center_point_marker.scale.x = 0.3;
+      center_point_marker.scale.y = 0.3;
+      center_point_marker.scale.z = 0.3;
+      center_point_marker.color.a = 1;
+      center_point_marker.color.r = 1.0f;
+      center_point_marker.color.g = 0.0f;
+      center_point_marker.color.b = 0.0f;
+      path_markers.markers.push_back(center_point_marker);
+      continue;
+    }
+    else{
+      center_point_marker.scale.x = 0.05;
+      center_point_marker.scale.y = 0.05;
+      center_point_marker.scale.z = 0.05;
+      center_point_marker.color.a = 1;
+      center_point_marker.color.r = 1.0f;
+      center_point_marker.color.g = 0.0f;
+      center_point_marker.color.b = 0.0f;
+      path_markers.markers.push_back(center_point_marker);
+    }
 
     octo_cube_marker.id = id_cnt;
     ++id_cnt;
@@ -220,8 +275,8 @@ void TruckServerNode::reconstructedPathDisplay(){
     octo_cube_marker.scale.z = cube_size;
     octo_cube_marker.color.a = 0.5;
     octo_cube_marker.color.r = 0.0f;
-    octo_cube_marker.color.g = 0.0f;
-    octo_cube_marker.color.b = 1.0f;
+    octo_cube_marker.color.g = 1.0f;
+    octo_cube_marker.color.b = 0.0f;
     path_markers.markers.push_back(octo_cube_marker);
   }
   pub_reconstructed_path_markers_.publish(path_markers);
@@ -233,11 +288,9 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
   // when not have prior knowledge of depth, assign depth as -1
   if (depth == -1)
     {
-        OcTreeNode* result = truck_.m_octree->search (query_point, 0);
-        depth = result->depth;
-        // 0.4 is free, 0.97 is occupied
-        if (result->getOccupancy() > 0.8)
-          isGridFree = false;
+      OcTreeNode* result = truck_.m_octree->searchReturnDepth(query_point, 0, depth);
+      if (result != NULL)
+        isGridFree = false;
     }
   key_type key_x = truck_.m_octree->coordToKey(query_point.x(), depth);
   key_type key_y = truck_.m_octree->coordToKey(query_point.y(), depth);
@@ -251,15 +304,20 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
   return isGridFree;
 }
 
-void TruckServerNode::aStarSearchInit(point3d init_point, point3d end_point)
+void TruckServerNode::aStarSearchInit()
 {
   data_set_num_ = 0;
+  data_set_vec_.clear();
+  open_set_vec_.clear();
+  close_set_vec_.clear();
+  astar_path_vec_.clear();
+
   point3d start_point;
   getGridCenter(init_point, start_point, -1);
-  OcTreeNode* start_node = truck_.m_octree->search (start_point, 0);
-  int start_node_depth = start_node->depth;
+  int start_node_depth;
+  truck_.m_octree->searchReturnDepth(start_point, 0, start_node_depth);
   double start_grid_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-start_node_depth);
-  double neighbor_grid_gap = start_grid_size + truck_.m_octree->resolution/2.0;
+  double neighbor_grid_gap = start_grid_size/2.0 + truck_.m_octree->resolution/2.0;
   for (int x = -1; x <= 1; ++x)
     for (int y = -1; y <= 1; ++y)
       for (int z = -1; z <= 1; ++z)
@@ -270,92 +328,97 @@ void TruckServerNode::aStarSearchInit(point3d init_point, point3d end_point)
                                                    neighbor_grid_gap*z)),
                             neighbor_center_point, -1))
             {
+              if (neighbor_center_point.z() < 0)
+                continue;
               aStarDataType new_astar_node;
               new_astar_node.prev_id = -1;
               new_astar_node.id = data_set_num_;
               new_astar_node.pos = neighbor_center_point;
               new_astar_node.g_val = init_point.distance(neighbor_center_point);
-              new_astar_node.h_val = neighbor_center_point.distance(end_point);
+              new_astar_node.h_val = neighbor_center_point.distance(land_point);
               new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
               open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
               data_set_vec_.push_back(new_astar_node);
               ++data_set_num_;
+              //test
+              //astar_path_vec_.push_back(neighbor_center_point);
             }
         }
 }
 
 
-void TruckServerNode::aStarSearch(point3d init_point, point3d land_point)
+bool TruckServerNode::aStarSearch()
 {
-  aStarSearchInit(init_point, land_point);
+  aStarSearchInit();
   point3d end_point;
   getGridCenter(land_point, end_point, -1);
 
   while (!open_set_vec_.empty())
     {
-      std::cout << "open set size: " << open_set_vec_.size() << '\n';
+      //std::cout << "open set size: " << open_set_vec_.size() << '\n';
       // Pop first element in open set, and push into close set
       aStarDataType start_astar_node = open_set_vec_[0];
       point3d start_point = start_astar_node.pos;
       // Judge whether reach the goal point
-      if (start_point == end_point)
+      // TODO: better end conditions is needed
+      if (start_point == end_point || start_point.distance(land_point) < 0.2*sqrt(3))
         {
-          std::cout << "Reach the goal point.\n";
+          ROS_INFO("Reach the goal point.");
           reconstructPath(start_astar_node.id);
-          break;
+          return true;
         }
-      double start_node_g_val = start_astar_node.g_val;
       close_set_vec_.insert(getPosItearator(start_astar_node.f_val, 'c'), start_astar_node);
       open_set_vec_.erase(open_set_vec_.begin());
 
-      OcTreeNode* start_octree_node = truck_.m_octree->search (start_point, 0);
-      int start_octree_node_depth = start_octree_node->depth;
+      int start_octree_node_depth;
+      truck_.m_octree->searchReturnDepth(start_point, 0, start_octree_node_depth);
       double start_grid_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-start_octree_node_depth);
-      double neighbor_grid_gap = start_grid_size + truck_.m_octree->resolution/2.0;
+      double neighbor_grid_gap = start_grid_size/2.0 + truck_.m_octree->resolution/2.0;
       for (int x = -1; x <= 1; ++x)
         for (int y = -1; y <= 1; ++y)
           for (int z = -1; z <= 1; ++z)
             {
+              if (x == 0 && y == 0 && z == 0)
+                continue;
               point3d neighbor_center_point;
               if (getGridCenter((start_point + point3d(neighbor_grid_gap*x,
                                                        neighbor_grid_gap*y,
                                                        neighbor_grid_gap*z)),
                                 neighbor_center_point, -1))
                 {
-                  if (nodeInCloseSet(neighbor_center_point))
+                  if (neighbor_center_point.z() < 0)
                     continue;
                   aStarDataType new_astar_node;
                   new_astar_node.prev_id = start_astar_node.id;
                   new_astar_node.pos = neighbor_center_point;
-                  new_astar_node.g_val = start_node_g_val + start_point.distance(neighbor_center_point);
-                  new_astar_node.h_val = neighbor_center_point.distance(end_point);
+                  new_astar_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
+                  new_astar_node.h_val = neighbor_center_point.distance(land_point);
                   new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
-                  double same_node_f_val;
-                  std::vector<aStarDataType>::iterator it_pos;
-                  if (!nodeInOpenSet(new_astar_node, same_node_f_val, it_pos))
+                  if (nodeInCloseSet(new_astar_node))
+                    continue;
+                  if (!nodeInOpenSet(new_astar_node))
                     {
                       new_astar_node.id = data_set_num_;
-                      open_set_vec_.insert(it_pos, new_astar_node);
+                      open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
                       data_set_vec_.push_back(new_astar_node);
                       ++data_set_num_;
-                    }
-                  else if (new_astar_node.f_val < same_node_f_val)
-                    {
-                      new_astar_node.id = it_pos->id;
-                      *it_pos = new_astar_node;
                     }
                 }
             }
     }
+  ROS_INFO("A Star Search failed!!");
+  return false;
 }
 
 void TruckServerNode::reconstructPath(int end_id)
 {
   // From end to start
+  astar_path_vec_.push_back(land_point);
   while(end_id != -1){
     astar_path_vec_.push_back(data_set_vec_[end_id].pos);
     end_id = data_set_vec_[end_id].prev_id;
   }
+  astar_path_vec_.push_back(init_point);
 }
 
 std::vector<aStarDataType>::iterator TruckServerNode::getPosItearator(double f_val, char ch)
@@ -378,35 +441,42 @@ std::vector<aStarDataType>::iterator TruckServerNode::getPosItearator(double f_v
   }
 }
 
-bool TruckServerNode::nodeInCloseSet(point3d node)
+bool TruckServerNode::nodeInCloseSet(aStarDataType& node)
 {
   std::vector<aStarDataType>::iterator it = close_set_vec_.begin();
+  std::vector<aStarDataType>::iterator it_pos;
   while (it != close_set_vec_.end()){
-    if (node == it->pos) return true;
+    if (node.pos == it->pos){
+      // If node in close set could be updated, move from close set to open set suitable position.
+      if (node.f_val < it->f_val){
+        node.id = it->id;
+        data_set_vec_[node.id] = node;
+        close_set_vec_.erase(it);
+        open_set_vec_.insert(getPosItearator(node.f_val, 'o'), node);
+      }
+      return true;
+    }
     else ++it;
   }
   return false;
 }
 
-bool TruckServerNode::nodeInOpenSet(aStarDataType node, double& same_node_f_val, std::vector<aStarDataType>::iterator& it_pos)
+bool TruckServerNode::nodeInOpenSet(aStarDataType& node)
 {
-  bool posFind = false;
   std::vector<aStarDataType>::iterator it = open_set_vec_.begin();
   while (it != open_set_vec_.end()){
     if (node.pos == it->pos){
-      it_pos = it;
-      same_node_f_val = it->f_val;
+      // if node in open set could be updated
+      if (node.f_val < it->f_val){
+        // Because f_val decreased, judge whether node's position in open set should be moved.
+        node.id = it->id;
+        data_set_vec_[node.id] = node;
+        open_set_vec_.erase(it);
+        open_set_vec_.insert(getPosItearator(node.f_val, 'o'), node);
+      }
       return true;
     }
-    else{
-        if (!posFind and node.f_val < it->f_val){
-            posFind = true;
-            it_pos = it;
-          }
-        ++it;
-      }
+    else ++it;
   }
-  if (!posFind)
-    it_pos = it;
   return false;
 }
