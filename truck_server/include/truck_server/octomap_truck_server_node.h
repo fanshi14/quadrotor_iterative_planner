@@ -112,7 +112,7 @@ void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPt
   if (astar_path_vec_.size() > 0)
     reconstructedPathDisplay(-1);
   init_point = point3d(msg->x, msg->y, msg->z);
-  land_point = point3d(-0.5, 0, 1.3);
+  land_point = point3d(-1, 0, 1.3);
   aStarSearch();
   ROS_INFO("Search finished");
   reconstructedPathDisplay(1);
@@ -335,7 +335,12 @@ void TruckServerNode::aStarSearchInit()
               new_astar_node.id = data_set_num_;
               new_astar_node.pos = neighbor_center_point;
               new_astar_node.g_val = init_point.distance(neighbor_center_point);
-              new_astar_node.h_val = neighbor_center_point.distance(land_point);
+              // Euclidean distance
+              //new_astar_node.h_val = neighbor_center_point.distance(land_point);
+              // Manhattan distance
+              new_astar_node.h_val = fabs(neighbor_center_point.x()-land_point.x())
+                + fabs(neighbor_center_point.y()-land_point.y())
+                + fabs(neighbor_center_point.z()-land_point.z());
               new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
               open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
               data_set_vec_.push_back(new_astar_node);
@@ -392,7 +397,12 @@ bool TruckServerNode::aStarSearch()
                   new_astar_node.prev_id = start_astar_node.id;
                   new_astar_node.pos = neighbor_center_point;
                   new_astar_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
-                  new_astar_node.h_val = neighbor_center_point.distance(land_point);
+                  // Euclidean distance
+                  //new_astar_node.h_val = neighbor_center_point.distance(land_point);
+                  // Manhattan distance
+                  new_astar_node.h_val = fabs(neighbor_center_point.x()-land_point.x())
+                    + fabs(neighbor_center_point.y()-land_point.y())
+                    + fabs(neighbor_center_point.z()-land_point.z());
                   new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
                   if (nodeInCloseSet(new_astar_node))
                     continue;

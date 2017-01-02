@@ -53,7 +53,7 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
   float roof_offset[3], base_offset[3], cargo_offset[3];
   float roof_size[3], base_size[3], cargo_size[3];
   // For uav safety margin
-  float uav_safety_margin_size[3] = {0.6f, 0.6f, 0.2f}, uav_safety_margin[3];
+  float uav_safety_margin_size[3] = {0.5f, 0.5f, 0.2f}, uav_safety_margin[3];
 
   // truck for challenge
   if (type == 0)
