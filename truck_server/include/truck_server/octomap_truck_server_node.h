@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <geometry_msgs/Vector3.h>
 #include <geometry_msgs/Point.h>
+#include <geometry_msgs/Point32.h>
+#include <geometry_msgs/PolygonStamped.h>
 #include <std_msgs/Empty.h>
 #include <iostream>
 #include <visualization_msgs/Marker.h>
@@ -35,11 +37,13 @@ public:
   ros::Subscriber sub_astar_query_;
   ros::Publisher pub_point_octocube_;
   ros::Publisher pub_reconstructed_path_markers_;
+  ros::Publisher pub_path_grid_points_;
 
   std::vector<aStarDataType> open_set_vec_, close_set_vec_, data_set_vec_;
   int data_set_num_;
   std::vector<point3d> astar_path_vec_;
   point3d init_point, land_point;
+  float spline_res;
 
   TruckOctomapServer truck_;
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
@@ -56,6 +60,7 @@ public:
   bool nodeInOpenSet(aStarDataType& node);
   void reconstructPath(int end_id);
   void reconstructedPathDisplay(int mode); // mode: 1, add display; -1, delete display
+  inline void point3dConvertToPoint32(point3d point3, geometry_msgs::Point32& point32);
 };
 
 void TruckServerNode::onInit()
@@ -67,9 +72,13 @@ void TruckServerNode::onInit()
 
   pub_point_octocube_ = nh_.advertise<visualization_msgs::Marker>("octo_cube_marker", 1);
   pub_reconstructed_path_markers_ = nh_.advertise<visualization_msgs::MarkerArray>("reconstructed_path_markers", 1);
+  pub_path_grid_points_  = nh_.advertise<geometry_msgs::PolygonStamped>("path_gird_points", 1);
 
   std::cout << "onInit finished.\n";
   ROS_INFO("onInit");
+
+  // todo: get from launch
+  spline_res = 0.2f;
 }
 
 void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
@@ -145,6 +154,7 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
   octo_cube_marker.type = visualization_msgs::Marker::CUBE;
   query_point_marker.type = visualization_msgs::Marker::CUBE;
 
+
   query_point_marker.pose.position.x = msg->x;
   query_point_marker.pose.position.y = msg->y;
   query_point_marker.pose.position.z = msg->z;
@@ -197,6 +207,15 @@ void TruckServerNode::reconstructedPathDisplay(int mode){
   octo_cube_marker.type = visualization_msgs::Marker::CUBE;
   center_point_marker.type = visualization_msgs::Marker::SPHERE;
   arrow_marker.type = visualization_msgs::Marker::ARROW;
+
+  geometry_msgs::PolygonStamped path_grid_points;
+  path_grid_points.header = octo_cube_marker.header;
+  geometry_msgs::Point32 grid_point, time_point;
+  time_point.x = 0.0f; time_point.y = 0.0f; time_point.z = 0.0f;
+  path_grid_points.polygon.points.push_back(time_point);
+  point3dConvertToPoint32(init_point, grid_point);
+  path_grid_points.polygon.points.push_back(grid_point);
+
   for (int i = points_num-1; i >=0 ; --i){
     int cur_depth;
     truck_.m_octree->searchReturnDepth(astar_path_vec_[i], 0, cur_depth);
@@ -228,6 +247,11 @@ void TruckServerNode::reconstructedPathDisplay(int mode){
       arrow_marker.color.g = 0.0f;
       arrow_marker.color.b = 1.0f;
       path_markers.markers.push_back(arrow_marker);
+
+      time_point.x += spline_res * int(astar_path_vec_[i].distance(astar_path_vec_[i-1]) / spline_res);
+      path_grid_points.polygon.points.push_back(time_point);
+      point3dConvertToPoint32(astar_path_vec_[i-1], grid_point);
+      path_grid_points.polygon.points.push_back(grid_point);
     }
 
     center_point_marker.id = id_cnt;
@@ -280,6 +304,7 @@ void TruckServerNode::reconstructedPathDisplay(int mode){
     path_markers.markers.push_back(octo_cube_marker);
   }
   pub_reconstructed_path_markers_.publish(path_markers);
+  pub_path_grid_points_.publish(path_grid_points);
 }
 
 bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, int depth)
@@ -489,4 +514,12 @@ bool TruckServerNode::nodeInOpenSet(aStarDataType& node)
     else ++it;
   }
   return false;
+}
+
+
+inline void TruckServerNode::point3dConvertToPoint32(point3d point3, geometry_msgs::Point32& point32)
+{
+  point32.x = point3.x();
+  point32.y = point3.y();
+  point32.z = point3.z();
 }
