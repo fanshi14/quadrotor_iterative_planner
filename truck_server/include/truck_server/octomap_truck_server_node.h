@@ -304,7 +304,8 @@ void TruckServerNode::reconstructedPathDisplay(int mode){
     path_markers.markers.push_back(octo_cube_marker);
   }
   pub_reconstructed_path_markers_.publish(path_markers);
-  pub_path_grid_points_.publish(path_grid_points);
+  if (mode == 1)
+    pub_path_grid_points_.publish(path_grid_points);
 }
 
 bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, int depth)
