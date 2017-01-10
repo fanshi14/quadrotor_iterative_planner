@@ -122,10 +122,11 @@ void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPt
     reconstructedPathDisplay(-1);
   init_point = point3d(msg->x, msg->y, msg->z);
   land_point = point3d(-1, 0, 1.3);
-  aStarSearch();
-  ROS_INFO("Search finished");
-  reconstructedPathDisplay(1);
-  ROS_INFO("Display finished");
+  if (aStarSearch()){
+    ROS_INFO("Search finished");
+    reconstructedPathDisplay(1);
+    ROS_INFO("Display finished");
+  }
 }
 
 void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
