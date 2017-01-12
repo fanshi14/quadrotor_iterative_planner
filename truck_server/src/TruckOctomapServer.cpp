@@ -46,7 +46,6 @@ void TruckOctomapServer::publishTruckAll(const ros::Time& rostime)
   this->publishAll(rostime);
 }
 
-//todo rotation bug
 void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
 {
   int roof[3], base[3], cargo[3];
@@ -282,6 +281,89 @@ void TruckOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
   m_octree->prune();
 
   printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
+}
+
+
+void TruckOctomapServer::WriteObstacleOctree(int type, Pose6D rot_mat)
+{
+  int roof[3], base[3];
+  float roof_offset[3], base_offset1[3], base_offset2[3];
+  float roof_size[3], base_size[3];
+  // For uav safety margin
+  float uav_safety_margin_size[3] = {0.5f, 0.5f, 0.2f}, uav_safety_margin[3];
+
+  // bridge
+  if (type == 0)
+    {
+      base_size[0] = 5.0f; base_size[1] = 2.0f; base_size[2] = 7.0f;
+      roof_size[0] = 5.0f; roof_size[1] = 26.0f; roof_size[2] = 2.0f;
+    }
+
+  // For uav safety margin
+  for (int i = 0; i < 3; ++i){
+    base_size[i] += 2*uav_safety_margin_size[i];
+    roof_size[i] += 2*uav_safety_margin_size[i];
+  }
+
+  for (int i = 0; i < 3; ++i){
+    base[i] = (int)round(base_size[i]/m_res);
+    roof[i] = (int)round(roof_size[i]/m_res);
+  }
+  roof_offset[0] = 0.0f; roof_offset[1] = -roof_size[1]/2.0f; roof_offset[2] = base_size[2];
+  base_offset1[0] = 0.0f; base_offset1[1] = roof_size[1]/2.0f-base_size[1]; base_offset1[2] = 0.0f;
+  base_offset2[0] = 0.0f; base_offset2[1] = -roof_size[1]/2.0f; base_offset2[2] = 0.0f;
+
+  // Judge whether start point is on boarder, in case octo map give seperate thin plannar.
+  for (int i = 0; i < 3; ++i)
+    {
+      int res_100 = int(m_res*100);
+      if (int(roof_offset[i]*100) % res_100 == 0)
+        roof_offset[i] += m_res/2.0f;
+      if (int(base_offset1[i]*100) % res_100 == 0)
+        base_offset1[i] += m_res/2.0f;
+      if (int(base_offset2[i]*100) % res_100 == 0)
+        base_offset2[i] += m_res/2.0f;
+    }
+
+  // roof above drivers
+  for (int x=0; x<roof[0]; x++) {
+    // For bridge, in order to extend its double side to longer, otherwise just for (int y=0; y<roof[1]; y++) 
+    for (int y=-roof[1]; y<2*roof[1]; y++) {
+      for (int z=0; z<roof[2]; z++) {
+        Vector3 end_vec = rot_mat.transform(Vector3((float) x*m_res+roof_offset[0], (float) y*m_res+roof_offset[1], (float) z*m_res+roof_offset[2]));
+        point3d endpoint (end_vec.x(), end_vec.y(), end_vec.z());
+        m_octree->updateNode(endpoint, true); // integrate 'occupied' measurement
+      }
+    }
+  }
+
+  // Truck's whole base
+  for (int x=0; x<base[0]; x++) {
+    for (int y=0; y<base[1]; y++) {
+      for (int z=0; z<base[2]; z++) {
+        Vector3 end_vec = rot_mat.transform(Vector3((float) x*m_res+base_offset1[0], (float) y*m_res+base_offset1[1], (float) z*m_res+base_offset1[2]));
+        point3d endpoint (end_vec.x(), end_vec.y(), end_vec.z());
+        m_octree->updateNode(endpoint, true); // integrate 'occupied' measurement
+      }
+    }
+  }
+
+  for (int x=0; x<base[0]; x++) {
+    for (int y=0; y<base[1]; y++) {
+      for (int z=0; z<base[2]; z++) {
+        Vector3 end_vec = rot_mat.transform(Vector3((float) x*m_res+base_offset2[0], (float) y*m_res+base_offset2[1], (float) z*m_res+base_offset2[2]));
+        point3d endpoint (end_vec.x(), end_vec.y(), end_vec.z());
+        m_octree->updateNode(endpoint, true); // integrate 'occupied' measurement
+      }
+    }
+  }
+
+
+  m_octree->prune();
+  m_octree->prune();
+
+  printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
+  ROS_INFO("Obstacle octree is generated.");
 }
 
 
