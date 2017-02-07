@@ -1,4 +1,5 @@
 <launch>
+  <arg name="has_uav" default="true"/>
   <!-- you can load an exisiting tree with <node ... args="tree.bt"> !-->
   <node pkg="truck_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
     <param name="resolution" value="0.1" />
@@ -6,4 +7,38 @@
   </node>
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(find truck_server)/config/truck_octomap.rviz" />
   <node pkg="truck_server" type="truck_octomap_flag.py" name="truck_octomap_flag" />
+  <group if="$(arg has_uav)">
+    <!-- Task1 environment with moving truck -->
+    <!-- <include file="$(find jsk_mbzirc_common)/launch/mbzirc_arena.launch" > -->
+    <!--   <arg name="gui" default="true"  /> -->
+    <!--   <arg name="world_name" default="$(find jsk_mbzirc_common)/gazebo_model/world/mbzirc_arena_task_1.world"/> -->
+    <!-- </include> -->
+
+    <!-- Task1 environment only -->
+    <!-- <include file="$(find jsk_mbzirc_common)/launch/mbzirc_arena_1.launch" > -->
+    <!--   <arg name="gui" value="true" /> -->
+    <!-- </include> -->
+
+    <!-- Empty environment -->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch" >
+      <arg name="gui" value="false" />
+    </include>
+
+    <include file="$(find hector_quadrotor_gazebo)/launch/spawn_quadrotor.launch" >
+      <arg name="name" value="quadrotor"/>
+      <!-- <arg name="model" value="$(find jsk_mbzirc_tasks)/urdf/hawk.urdf.xacro"/> -->
+      <arg name="model" value="$(find hector_quadrotor_description)/urdf/quadrotor_downward_cam.gazebo.xacro"/>
+      <arg name="use_ground_truth_for_tf" value="true" />
+      <arg name="use_ground_truth_for_control" value="true" />
+      <arg name="x" value="-10"/>
+      <arg name="y" value="0"/>
+      <arg name="z" value="0.5"/>
+    </include>
+    <node pkg="truck_server" type="uav_teleop_keyboard" name="uav_teleop_keyboard"
+          launch-prefix="xterm -e">
+        <param name="teleopUGV" value="false"/>
+        <remap from="teleopUGV" to="uav_teleop_keyboard/teleopUGV"/>
+    </node>
+
+  </group>
 </launch>

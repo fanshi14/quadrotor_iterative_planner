@@ -56,6 +56,9 @@ add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_gencfg)
 add_executable(octomap_truck_server_node src/octomap_truck_server_node.cpp)
 target_link_libraries(octomap_truck_server_node ${PROJECT_NAME} ${LINK_LIBS})
 
+add_executable(uav_teleop_keyboard src/uav_teleop_keyboard.cpp)
+target_link_libraries(uav_teleop_keyboard ${PROJECT_NAME} ${LINK_LIBS})
+
 # Nodelet
 #add_library(octomap_server_nodelet src/octomap_server_nodelet.cpp)
 #target_link_libraries(octomap_server_nodelet ${PROJECT_NAME} ${LINK_LIBS})
