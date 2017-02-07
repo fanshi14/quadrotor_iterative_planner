@@ -14,6 +14,7 @@ TruckOctomapServer::TruckOctomapServer() :
 
   private_nh.param("resolution", m_res, 0.1);
   private_nh.param("frame_id", m_worldFrameId, (std::string)"/map");
+  private_nh.param("route_name", m_route_name, (std::string)"track");
 
   init_param();
 }
@@ -24,11 +25,11 @@ void TruckOctomapServer::init_param()
 {
   m_octree->setResolution(m_res);
 
-  step_value = (float)m_res / 2.0f;
+  m_step_value = (float)m_res / 2.0f;
 
   m_octree->enableChangeDetection(true);
 
-  pub_lane_marker = this->m_nh.advertise<visualization_msgs::Marker>("lane_marker", 10);
+  m_pub_lane_marker = this->m_nh.advertise<visualization_msgs::Marker>("lane_marker", 10);
 
   printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
 }
@@ -408,6 +409,6 @@ void TruckOctomapServer::laneMarkerVisualization()
       p.x = -20.0;
       lane_list_marker.points.push_back(p);
     }
-  pub_lane_marker = nh.advertise<visualization_msgs::Marker>("lane_marker", 10);
-  pub_lane_marker.publish(lane_list_marker);
+  m_pub_lane_marker = nh.advertise<visualization_msgs::Marker>("lane_marker", 10);
+  m_pub_lane_marker.publish(lane_list_marker);
 }
