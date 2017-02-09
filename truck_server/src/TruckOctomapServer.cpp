@@ -372,44 +372,42 @@ void TruckOctomapServer::WriteObstacleOctree(int type, Pose6D rot_mat)
 void TruckOctomapServer::laneMarkerVisualization()
 {
   ros::NodeHandle nh;
-  visualization_msgs::Marker lane_list_marker;
-  lane_list_marker.ns = "lanes";
-  lane_list_marker.header.frame_id = std::string("/world");
-  lane_list_marker.header.stamp = ros::Time().now();
-  lane_list_marker.action = visualization_msgs::Marker::ADD;
-  lane_list_marker.id = 0;
-  lane_list_marker.type = visualization_msgs::Marker::LINE_LIST;
+    visualization_msgs::Marker lane_list_marker;
+  for (uint32_t i = 0; i < 4; ++i){
+    lane_list_marker.ns = "lanes";
+    lane_list_marker.header.frame_id = std::string("/world");
+    lane_list_marker.header.stamp = ros::Time().now();
+    lane_list_marker.action = visualization_msgs::Marker::ADD;
+    lane_list_marker.id = 0;
+    lane_list_marker.type = visualization_msgs::Marker::LINE_STRIP;
 
-  lane_list_marker.pose.position.x = 0.0;
-  lane_list_marker.pose.position.y = 0.0;
-  lane_list_marker.pose.position.z = 0.0;
+    lane_list_marker.pose.position.x = 0.0;
+    lane_list_marker.pose.position.y = 0.0;
+    lane_list_marker.pose.position.z = 0.0;
 
-  lane_list_marker.pose.orientation.x = 0.0;
-  lane_list_marker.pose.orientation.y = 0.0;
-  lane_list_marker.pose.orientation.z = 0.0;
-  lane_list_marker.pose.orientation.w = 1.0;
-  lane_list_marker.scale.x = 0.2;
-  lane_list_marker.scale.y = 0.2;
-  lane_list_marker.scale.z = 0.2;
-  lane_list_marker.color.a = 1.0;
-  lane_list_marker.color.r = 1.0f;
-  lane_list_marker.color.g = 1.0f;
-  lane_list_marker.color.b = 1.0f;
-  // Create the vertices for the points and lines
-  for (uint32_t i = 0; i < 4; ++i)
-    {
-      float y = -m_route_radius + i * 3.5 - 5.25;
-
+    lane_list_marker.pose.orientation.x = 0.0;
+    lane_list_marker.pose.orientation.y = 0.0;
+    lane_list_marker.pose.orientation.z = 0.0;
+    lane_list_marker.pose.orientation.w = 1.0;
+    lane_list_marker.scale.x = 0.2;
+    lane_list_marker.scale.y = 0.2;
+    lane_list_marker.scale.z = 0.2;
+    lane_list_marker.color.a = 1.0;
+    lane_list_marker.color.r = 1.0f;
+    lane_list_marker.color.g = 1.0f;
+    lane_list_marker.color.b = 1.0f;
+    // Create the vertices for the points and lines
+    double radius = m_route_radius + i * 3.5 - 5.25;
+    for (int j = 0; j < 360; ++j){
       geometry_msgs::Point p;
-      p.x = 50.0;
-      p.y = y;
+      p.x = radius * sin(j/180.0*3.14);
+      p.y = radius * cos(j/180.0*3.14);
       p.z = 0;
 
       // The line list needs two points for each line
       lane_list_marker.points.push_back(p);
-      p.x = -20.0;
-      lane_list_marker.points.push_back(p);
     }
-  m_pub_lane_marker = nh.advertise<visualization_msgs::Marker>("lane_marker", 10);
-  m_pub_lane_marker.publish(lane_list_marker);
+  }
+    m_pub_lane_marker = nh.advertise<visualization_msgs::Marker>("lane_marker", 10);
+    m_pub_lane_marker.publish(lane_list_marker);
 }
