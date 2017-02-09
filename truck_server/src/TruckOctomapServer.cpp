@@ -13,7 +13,7 @@ TruckOctomapServer::TruckOctomapServer() :
   ros::NodeHandle private_nh("~");
 
   private_nh.param("resolution", m_res, 0.1);
-  private_nh.param("frame_id", m_worldFrameId, (std::string)"/map");
+  private_nh.param("frame_id", m_worldFrameId, (std::string)"world");
   private_nh.param("route_name", m_route_name, (std::string)"track");
   private_nh.param("route_radius", m_route_radius, 20.0f);
 
@@ -397,14 +397,16 @@ void TruckOctomapServer::laneMarkerVisualization()
   for (uint32_t i = 0; i < 4; ++i){
     // Create the vertices for the points and lines
     double radius = m_route_radius + i * 3.5 - 5.25;
-    for (int j = 0; j <= 360; ++j){
-      geometry_msgs::Point p;
-      p.x = radius * sin(j/180.0*3.14);
-      p.y = -radius * cos(j/180.0*3.14);
-      p.z = 0;
+    if (m_route_name == (std::string)"circle"){
+      for (int j = 0; j <= 360; ++j){
+        geometry_msgs::Point p;
+        p.x = radius * sin(j/180.0*3.14);
+        p.y = -radius * cos(j/180.0*3.14);
+        p.z = 0;
 
-      // The line list needs two points for each line
-      lane_strip_marker.points.push_back(p);
+        // The line list needs two points for each line
+        lane_strip_marker.points.push_back(p);
+      }
     }
   }
   m_pub_lane_marker.publish(lane_strip_marker);

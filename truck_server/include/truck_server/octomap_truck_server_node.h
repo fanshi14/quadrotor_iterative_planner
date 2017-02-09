@@ -5,6 +5,8 @@
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/PolygonStamped.h>
+#include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/Pose.h>
 #include <std_msgs/Empty.h>
 #include <iostream>
 #include <visualization_msgs/Marker.h>
@@ -32,9 +34,11 @@ class TruckServerNode
 public:
   ros::NodeHandle nh_;
   ros::Subscriber sub_point_occupied_query_;
-  ros::Subscriber sub_truck_octomap_flag_;
+  ros::Subscriber sub_lane_marker_flag_;
   ros::Subscriber sub_point_depth_query_;
   ros::Subscriber sub_astar_query_;
+  ros::Subscriber sub_cars_poses_;
+
   ros::Publisher pub_point_octocube_;
   ros::Publisher pub_reconstructed_path_markers_;
   ros::Publisher pub_path_grid_points_;
@@ -48,8 +52,10 @@ public:
   TruckOctomapServer truck_;
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
-  void truckOctomapCallback(const std_msgs::Empty msg);
+  void laneMarkerCallback(const std_msgs::Empty msg);
   void astarPathQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
+  void carsPosesCallback(const geometry_msgs::PoseArrayConstPtr& msg);
+
   void onInit();
   // return true if the grid is free
   bool getGridCenter(point3d query_point, point3d& center_point, int depth);
@@ -66,9 +72,11 @@ public:
 void TruckServerNode::onInit()
 {
   sub_point_occupied_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_occupied", 10, &TruckServerNode::pointOccupiedQueryCallback, this);
-  sub_truck_octomap_flag_ = nh_.subscribe<std_msgs::Empty>("/truck_octomap_flag", 1, &TruckServerNode::truckOctomapCallback, this);
+  sub_lane_marker_flag_ = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
   sub_point_depth_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_depth", 1, &TruckServerNode::pointDepthQueryCallback, this);
   sub_astar_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_astar_path", 1, &TruckServerNode::astarPathQueryCallback, this);
+  sub_cars_poses_ = nh_.subscribe<geometry_msgs::PoseArray>("/cars_poses", 1, &TruckServerNode::carsPosesCallback, this);
+
 
   pub_point_octocube_ = nh_.advertise<visualization_msgs::Marker>("octo_cube_marker", 1);
   pub_reconstructed_path_markers_ = nh_.advertise<visualization_msgs::MarkerArray>("reconstructed_path_markers", 1);
@@ -97,29 +105,29 @@ void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3Con
     }
 }
 
-void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
+void TruckServerNode::laneMarkerCallback(const std_msgs::Empty msg)
 {
   truck_.laneMarkerVisualization();
+}
 
-  // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
-  // truck_.WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
-  // truck_.WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
 
-  int id = 0;
-  double ang_vel = 10, refresh_t = 0.1;
-  while (1){
-    truck_.m_octree->clear();
-    double rot_ang = id%360 * ang_vel*refresh_t * 3.1415926 / 180.0;
-    // x,y,z,r,p,y
-    truck_.WriteVehicleOctree(0, Pose6D(truck_.m_route_radius*sin(rot_ang), -truck_.m_route_radius*cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
-    truck_.WriteVehicleOctree(1, Pose6D((truck_.m_route_radius-3.5)*sin(rot_ang), -(truck_.m_route_radius-3.5)*cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
-    truck_.WriteVehicleOctree(2, Pose6D((truck_.m_route_radius+3.5)*sin(rot_ang), -(truck_.m_route_radius+3.5)*cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
-    /* Bridge obstacle */
-    //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
-    truck_.publishTruckAll(ros::Time().now());
-    usleep(refresh_t*1000000);
-    ++id;
+void TruckServerNode::carsPosesCallback(const geometry_msgs::PoseArrayConstPtr& msg)
+{
+  truck_.m_octree->clear();
+
+  // x,y,z,r,p,y
+  // todo: currently directly assign ang value to orientation.w
+  truck_.WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
+  if (msg->poses.size() > 1){
+    truck_.WriteVehicleOctree(1, Pose6D(msg->poses[1].position.x, msg->poses[1].position.y, 0.0f, 0.0, 0.0, msg->poses[1].orientation.w));
+    truck_.WriteVehicleOctree(2, Pose6D(msg->poses[2].position.x, msg->poses[2].position.y, 0.0f, 0.0, 0.0, msg->poses[2].orientation.w));
+    // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
+    // truck_.WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
+    // truck_.WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
   }
+  /* Bridge obstacle */
+  //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
+  truck_.publishTruckAll(ros::Time().now());
 }
 
 void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){

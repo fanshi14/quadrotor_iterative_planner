@@ -9,6 +9,7 @@
 #include <math.h>
 #include <vector>
 #include <nav_msgs/Path.h>
+#include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Point.h>
 #include <visualization_msgs/Marker.h>
@@ -25,6 +26,7 @@ public:
   ros::Publisher m_pub_lane_marker;
   std::string m_route_name;
   float m_route_radius;
+  std::string m_truck_odom_sub_topic_name;
 
   void init_param();
   void WriteVehicleOctree(int type, Pose6D rot_mat);
