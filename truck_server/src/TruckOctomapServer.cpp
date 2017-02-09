@@ -371,29 +371,29 @@ void TruckOctomapServer::WriteObstacleOctree(int type, Pose6D rot_mat)
 
 void TruckOctomapServer::laneMarkerVisualization()
 {
-  visualization_msgs::Marker lane_list_marker;
-  lane_list_marker.ns = "lanes";
-  lane_list_marker.header.frame_id = std::string("/world");
-  lane_list_marker.header.stamp = ros::Time().now();
-  lane_list_marker.action = visualization_msgs::Marker::ADD;
-  lane_list_marker.id = 0;
-  lane_list_marker.type = visualization_msgs::Marker::LINE_STRIP;
+  visualization_msgs::Marker lane_strip_marker;
+  lane_strip_marker.ns = "lanes";
+  lane_strip_marker.header.frame_id = std::string("/world");
+  lane_strip_marker.header.stamp = ros::Time().now();
+  lane_strip_marker.action = visualization_msgs::Marker::ADD;
+  lane_strip_marker.id = 0;
+  lane_strip_marker.type = visualization_msgs::Marker::LINE_STRIP;
 
-  lane_list_marker.pose.position.x = 0.0;
-  lane_list_marker.pose.position.y = 0.0;
-  lane_list_marker.pose.position.z = 0.0;
+  lane_strip_marker.pose.position.x = 0.0;
+  lane_strip_marker.pose.position.y = 0.0;
+  lane_strip_marker.pose.position.z = 0.0;
 
-  lane_list_marker.pose.orientation.x = 0.0;
-  lane_list_marker.pose.orientation.y = 0.0;
-  lane_list_marker.pose.orientation.z = 0.0;
-  lane_list_marker.pose.orientation.w = 1.0;
-  lane_list_marker.scale.x = 0.2;
-  lane_list_marker.scale.y = 0.2;
-  lane_list_marker.scale.z = 0.2;
-  lane_list_marker.color.a = 1.0;
-  lane_list_marker.color.r = 1.0f;
-  lane_list_marker.color.g = 1.0f;
-  lane_list_marker.color.b = 1.0f;
+  lane_strip_marker.pose.orientation.x = 0.0;
+  lane_strip_marker.pose.orientation.y = 0.0;
+  lane_strip_marker.pose.orientation.z = 0.0;
+  lane_strip_marker.pose.orientation.w = 1.0;
+  lane_strip_marker.scale.x = 0.2;
+  lane_strip_marker.scale.y = 0.2;
+  lane_strip_marker.scale.z = 0.2;
+  lane_strip_marker.color.a = 1.0;
+  lane_strip_marker.color.r = 1.0f;
+  lane_strip_marker.color.g = 1.0f;
+  lane_strip_marker.color.b = 1.0f;
   for (uint32_t i = 0; i < 4; ++i){
     // Create the vertices for the points and lines
     double radius = m_route_radius + i * 3.5 - 5.25;
@@ -404,8 +404,8 @@ void TruckOctomapServer::laneMarkerVisualization()
       p.z = 0;
 
       // The line list needs two points for each line
-      lane_list_marker.points.push_back(p);
+      lane_strip_marker.points.push_back(p);
     }
   }
-  m_pub_lane_marker.publish(lane_list_marker);
+  m_pub_lane_marker.publish(lane_strip_marker);
 }
