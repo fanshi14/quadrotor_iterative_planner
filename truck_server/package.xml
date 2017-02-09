@@ -27,8 +27,6 @@
   <build_depend>libpcl-all-dev</build_depend>
   <build_depend>octomap_server</build_depend>
   <build_depend>geometry_msgs</build_depend>
-  <build_depend>jsk_mbzirc_tasks</build_depend>
-  <build_depend>jsk_mbzirc_common</build_depend>
   <build_depend>teleop_twist_keyboard</build_depend>
 
   <run_depend>gazebo_ros</run_depend>
@@ -51,8 +49,6 @@
   <run_depend>dynamic_reconfigure</run_depend>
   <run_depend>nodelet</run_depend>
   <run_depend>libpcl-all</run_depend>
-  <run_depend>jsk_mbzirc_tasks</run_depend>
-  <run_depend>jsk_mbzirc_common</run_depend>
 </package>
 
 
