@@ -99,22 +99,27 @@ void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3Con
 
 void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
 {
-  double rot_deg = 0;
-  double rot_ang = rot_deg * 3.1415926 / 360.0;
-  // x,y,z,r,p,y
-  truck_.WriteVehicleOctree(0, Pose6D(0.0f, -truck_.m_route_radius, 0.0f, 0.0, 0.0, rot_ang));
-  truck_.WriteVehicleOctree(1, Pose6D(0.0f, -truck_.m_route_radius + 3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
-  truck_.WriteVehicleOctree(2, Pose6D(0.0f, -truck_.m_route_radius - 3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
-  /* Bridge obstacle */
-  //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
   truck_.laneMarkerVisualization();
 
   // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
   // truck_.WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
   // truck_.WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
 
-  truck_.publishTruckAll(ros::Time().now());
-  usleep(1000000);
+  int id = 0;
+  double ang_vel = 10, refresh_t = 0.1;
+  while (1){
+    truck_.m_octree->clear();
+    double rot_ang = id%360 * ang_vel*refresh_t * 3.1415926 / 180.0;
+    // x,y,z,r,p,y
+    truck_.WriteVehicleOctree(0, Pose6D(truck_.m_route_radius*sin(rot_ang), -truck_.m_route_radius*cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
+    truck_.WriteVehicleOctree(1, Pose6D((truck_.m_route_radius-3.5)*sin(rot_ang), -(truck_.m_route_radius-3.5)*cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
+    truck_.WriteVehicleOctree(2, Pose6D((truck_.m_route_radius+3.5)*sin(rot_ang), -(truck_.m_route_radius+3.5)*cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
+    /* Bridge obstacle */
+    //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
+    truck_.publishTruckAll(ros::Time().now());
+    usleep(refresh_t*1000000);
+    ++id;
+  }
 }
 
 void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
