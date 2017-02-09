@@ -33,7 +33,7 @@
       <arg name="use_ground_truth_for_tf" value="true" />
       <arg name="use_ground_truth_for_control" value="true" />
       <arg name="x" value="-10"/>
-      <arg name="y" value="0"/>
+      <arg name="y" value="-20"/>
       <arg name="z" value="0.5"/>
     </include>
     <node pkg="truck_server" type="uav_teleop_keyboard" name="uav_teleop_keyboard"

@@ -15,6 +15,7 @@ TruckOctomapServer::TruckOctomapServer() :
   private_nh.param("resolution", m_res, 0.1);
   private_nh.param("frame_id", m_worldFrameId, (std::string)"/map");
   private_nh.param("route_name", m_route_name, (std::string)"track");
+  private_nh.param("route_radius", m_route_radius, 20.0f);
 
   init_param();
 }
@@ -397,7 +398,7 @@ void TruckOctomapServer::laneMarkerVisualization()
   // Create the vertices for the points and lines
   for (uint32_t i = 0; i < 4; ++i)
     {
-      float y = i * 3.5 - 5.25;
+      float y = -m_route_radius + i * 3.5 - 5.25;
 
       geometry_msgs::Point p;
       p.x = 50.0;

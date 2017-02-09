@@ -24,6 +24,7 @@ public:
   float m_step_value;
   ros::Publisher m_pub_lane_marker;
   std::string m_route_name;
+  float m_route_radius;
 
   void init_param();
   void WriteVehicleOctree(int type, Pose6D rot_mat);

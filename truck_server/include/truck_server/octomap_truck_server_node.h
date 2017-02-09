@@ -102,10 +102,11 @@ void TruckServerNode::truckOctomapCallback(const std_msgs::Empty msg)
   double rot_deg = 0;
   double rot_ang = rot_deg * 3.1415926 / 360.0;
   // x,y,z,r,p,y
-  truck_.WriteVehicleOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
-  truck_.WriteVehicleOctree(1, Pose6D(0.0f, 3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
-  truck_.WriteVehicleOctree(2, Pose6D(0.0f, -3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
-  truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
+  truck_.WriteVehicleOctree(0, Pose6D(0.0f, -truck_.m_route_radius, 0.0f, 0.0, 0.0, rot_ang));
+  truck_.WriteVehicleOctree(1, Pose6D(0.0f, -truck_.m_route_radius + 3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
+  truck_.WriteVehicleOctree(2, Pose6D(0.0f, -truck_.m_route_radius - 3.5f/cos(rot_ang), 0.0f, 0.0, 0.0, rot_ang));
+  /* Bridge obstacle */
+  //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
   truck_.laneMarkerVisualization();
 
   // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
@@ -122,7 +123,7 @@ void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPt
   if (astar_path_vec_.size() > 0)
     reconstructedPathDisplay(-1);
   init_point = point3d(msg->x, msg->y, msg->z);
-  land_point = point3d(-1, 0, 1.3);
+  land_point = point3d(-1, -truck_.m_route_radius, 1.3);
   if (aStarSearch()){
     ROS_INFO("Search finished");
     reconstructedPathDisplay(1);
