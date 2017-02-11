@@ -1,13 +1,14 @@
 <launch>
   <arg name="has_uav" default="true"/>
   <arg name="route" default="circle"/>
-  <arg name="radius" default="20.0"/>
+  <arg name="radius" default="40.0"/>
 
   <node pkg="truck_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
     <param name="resolution" value="0.1" />
     <param name="frame_id" type="string" value="world" />
     <!-- track or circle -->
     <param name="route_name" value="$(arg route)" />
+    <param name="route_radius" value="$(arg radius)" />
     <param name="truck_odom_sub_topic_name" value="/truck_odom" />
   </node>
 
@@ -17,8 +18,8 @@
     <param name="route_name" value="$(arg route)" />
     <param name="route_radius" value="$(arg radius)" />
     <param name="truck_vel" value="4.17" />
-    <param name="car_big_vel" value="2" />
-    <param name="car_small_vel" value="6" />
+    <param name="car_big_vel" value="4.17" />
+    <param name="car_small_vel" value="4.17" />
   </node>
 
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(find truck_server)/config/truck_octomap.rviz" />
