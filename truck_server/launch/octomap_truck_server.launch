@@ -10,6 +10,7 @@
     <param name="route_name" value="$(arg route)" />
     <param name="route_radius" value="$(arg radius)" />
     <param name="truck_odom_sub_topic_name" value="/truck_odom" />
+    <param name="octomap_update_rate" value="50" />
   </node>
 
   <node pkg="truck_server" type="sim_cars_poses_pub.py" name="sim_cars_poses_pub" output="screen">

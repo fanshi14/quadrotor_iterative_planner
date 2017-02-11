@@ -49,6 +49,9 @@ public:
   point3d init_point, land_point;
   float spline_res;
 
+  int m_octomap_update_feq;
+  int m_octomap_update_feq_cnt;
+
   TruckOctomapServer truck_;
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
@@ -71,6 +74,14 @@ public:
 
 void TruckServerNode::onInit()
 {
+
+  ros::NodeHandle private_nh("~");
+
+  private_nh.param("octomap_update_rate", m_octomap_update_feq, 1);
+
+
+  m_octomap_update_feq_cnt = 0;
+
   sub_point_occupied_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_occupied", 10, &TruckServerNode::pointOccupiedQueryCallback, this);
   sub_lane_marker_flag_ = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
   sub_point_depth_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_depth", 1, &TruckServerNode::pointDepthQueryCallback, this);
@@ -84,6 +95,7 @@ void TruckServerNode::onInit()
 
   std::cout << "onInit finished.\n";
   ROS_INFO("onInit");
+
 
   // todo: get from launch
   spline_res = 0.2f;
@@ -113,21 +125,25 @@ void TruckServerNode::laneMarkerCallback(const std_msgs::Empty msg)
 
 void TruckServerNode::carsPosesCallback(const geometry_msgs::PoseArrayConstPtr& msg)
 {
-  truck_.m_octree->clear();
+  ++m_octomap_update_feq_cnt;
+  if (m_octomap_update_feq_cnt >= m_octomap_update_feq){
+    m_octomap_update_feq_cnt = 0;
+    truck_.m_octree->clear();
 
-  // x,y,z,r,p,y
-  // todo: currently directly assign ang value to orientation.w
-  truck_.WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
-  if (msg->poses.size() > 1){
-    truck_.WriteVehicleOctree(1, Pose6D(msg->poses[1].position.x, msg->poses[1].position.y, 0.0f, 0.0, 0.0, msg->poses[1].orientation.w));
-    truck_.WriteVehicleOctree(2, Pose6D(msg->poses[2].position.x, msg->poses[2].position.y, 0.0f, 0.0, 0.0, msg->poses[2].orientation.w));
-    // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
-    // truck_.WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
-    // truck_.WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
+    // x,y,z,r,p,y
+    // todo: currently directly assign ang value to orientation.w
+    truck_.WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
+    if (msg->poses.size() > 1){
+      truck_.WriteVehicleOctree(1, Pose6D(msg->poses[1].position.x, msg->poses[1].position.y, 0.0f, 0.0, 0.0, msg->poses[1].orientation.w));
+      truck_.WriteVehicleOctree(2, Pose6D(msg->poses[2].position.x, msg->poses[2].position.y, 0.0f, 0.0, 0.0, msg->poses[2].orientation.w));
+      // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
+      // truck_.WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
+      // truck_.WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
+    }
+    /* Bridge obstacle */
+    //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
+    truck_.publishTruckAll(ros::Time().now());
   }
-  /* Bridge obstacle */
-  //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
-  truck_.publishTruckAll(ros::Time().now());
 }
 
 void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
