@@ -2,8 +2,8 @@
   <arg name="has_uav" default="true"/>
   <arg name="route" default="circle"/>
   <arg name="radius" default="40.0"/>
-  <arg name="has_car_big" default="true"/>
-  <arg name="has_car_small" default="true"/>
+  <arg name="has_car_outter" default="true"/>
+  <arg name="has_car_inner" default="true"/>
 
   <node pkg="truck_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
     <param name="resolution" value="0.1" />
@@ -14,21 +14,22 @@
     <param name="truck_odom_sub_topic_name" value="/truck_odom" />
     <param name="octomap_update_rate" value="50" />
     <param name="vehicle_octomap_visualize_mode" value="1" />
+    <param name="vehicle_inner_type" value="1" />
+    <param name="vehicle_outter_type" value="2" />
   </node>
 
   <node pkg="truck_server" type="sim_cars_poses_pub.py" name="sim_cars_poses_pub" output="screen">
-    <param name="has_car_small" value="$(arg has_car_small)" />
-    <param name="has_car_big" value="$(arg has_car_big)" />
+    <param name="has_car_inner" value="$(arg has_car_inner)" />
+    <param name="has_car_outter" value="$(arg has_car_outter)" />
     <param name="route_name" value="$(arg route)" />
     <param name="route_radius" value="$(arg radius)" />
     <param name="truck_vel" value="4.17" />
-    <param name="car_big_vel" value="4.17" />
-    <param name="car_small_vel" value="4.17" />
+    <param name="car_outter_vel" value="4.17" />
+    <param name="car_inner_vel" value="4.17" />
   </node>
 
 
   <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="truck_traj" output="screen">
-    <param name="vehicle_odom_sub_topic_name" value="/truck_odom" />
     <param name="vehicle_traj_param_pub_topic_name" value="/truck_traj_param" />
     <param name="vehicle_traj_path_pub_topic_name" value="/truck_traj_path" />
     <param name="vehicle_traj_polynomial_order" value="8" />
@@ -41,11 +42,11 @@
     <param name="param_output_param" value="false" />
   </node>
 
-  <group if="$(arg has_car_small)">
-    <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="car_small_traj" output="screen">
-      <param name="vehicle_odom_sub_topic_name" value="/car_small_odom" />
-      <param name="vehicle_traj_param_pub_topic_name" value="/car_small_traj_param" />
-      <param name="vehicle_traj_path_pub_topic_name" value="/car_small_path" />
+  <group if="$(arg has_car_inner)">
+    <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="car_inner_traj" output="screen">
+      <param name="vehicle_odom_sub_topic_name" value="/car_inner_odom" />
+      <param name="vehicle_traj_param_pub_topic_name" value="/car_inner_traj_param" />
+      <param name="vehicle_traj_path_pub_topic_name" value="/car_inner_path" />
       <param name="vehicle_traj_polynomial_order" value="8" />
       <param name="vehicle_traj_derivation_order" value="4" />
       <param name="vehicle_lambda_D" value="1.0" />
@@ -57,11 +58,12 @@
     </node>
   </group>
 
-  <group if="$(arg has_car_big)">
-    <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="car_big_traj" output="screen">
-      <param name="vehicle_odom_sub_topic_name" value="/car_big_odom" />
-      <param name="vehicle_traj_param_pub_topic_name" value="/car_big_traj_param" />
-      <param name="vehicle_traj_path_pub_topic_name" value="/car_big_path" />
+  <group if="$(arg has_car_outter)">
+    <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="car_outter_traj" output="screen">
+      <param name="vehicle_type" value="2" />
+      <param name="vehicle_odom_sub_topic_name" value="/car_outter_odom" />
+      <param name="vehicle_traj_param_pub_topic_name" value="/car_outter_traj_param" />
+      <param name="vehicle_traj_path_pub_topic_name" value="/car_outter_path" />
       <param name="vehicle_traj_polynomial_order" value="8" />
       <param name="vehicle_traj_derivation_order" value="4" />
       <param name="vehicle_lambda_D" value="1.0" />

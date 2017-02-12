@@ -9,35 +9,35 @@ import math
 
 def talker():
     rospy.init_node('sim_cars_poses_pub', anonymous=True)
-    has_car_small = rospy.get_param("~has_car_small", False)
-    has_car_big = rospy.get_param("~has_car_big", False)
+    has_car_inner = rospy.get_param("~has_car_inner", False)
+    has_car_outter = rospy.get_param("~has_car_outter", False)
     route_name = rospy.get_param("~route_name", "circle")
     route_radius = rospy.get_param("~route_radius", 20.0)
     truck_vel = rospy.get_param("~truck_vel", 4.17)
-    car_small_vel = rospy.get_param("~car_small_vel", 4.17)
-    car_big_vel = rospy.get_param("~car_big_vel", 4.17)
+    car_inner_vel = rospy.get_param("~car_inner_vel", 4.17)
+    car_outter_vel = rospy.get_param("~car_outter_vel", 4.17)
 
     cars_poses_pub = rospy.Publisher('/cars_poses', PoseArray, queue_size=1)
     truck_odom_pub = rospy.Publisher('/truck_odom', Odometry, queue_size=1)
-    car_small_odom_pub = rospy.Publisher('/car_small_odom', Odometry, queue_size=1)
-    car_big_odom_pub = rospy.Publisher('/car_big_odom', Odometry, queue_size=1)
+    car_inner_odom_pub = rospy.Publisher('/car_inner_odom', Odometry, queue_size=1)
+    car_outter_odom_pub = rospy.Publisher('/car_outter_odom', Odometry, queue_size=1)
 
-    car_small_radius = route_radius - 3.5
-    car_big_radius = route_radius + 3.5
+    car_inner_radius = route_radius - 3.5
+    car_outter_radius = route_radius + 3.5
     truck_radius = route_radius
 
     print "Route name: ", route_name
 
-    car_small_ang_vel = car_small_vel / car_small_radius
-    car_big_ang_vel = car_big_vel / car_big_radius
+    car_inner_ang_vel = car_inner_vel / car_inner_radius
+    car_outter_ang_vel = car_outter_vel / car_outter_radius
     truck_ang_vel = truck_vel / truck_radius
     cnt = 0
     rate = rospy.Rate(50)
     while not rospy.is_shutdown():
         poses = PoseArray()
-        truck_odom = car_small_odom = car_big_odom = Odometry()
-        poses.header.frame_id = truck_odom.header.frame_id = car_small_odom.header.frame_id = car_big_odom.header.frame_id = "world"
-        poses.header.stamp = truck_odom.header.stamp = car_small_odom.header.stamp = car_big_odom.header.stamp = rospy.Time.now()
+        truck_odom = car_inner_odom = car_outter_odom = Odometry()
+        poses.header.frame_id = truck_odom.header.frame_id = car_inner_odom.header.frame_id = car_outter_odom.header.frame_id = "world"
+        poses.header.stamp = truck_odom.header.stamp = car_inner_odom.header.stamp = car_outter_odom.header.stamp = rospy.Time.now()
 
         if route_name == "circle":
             ## truck
@@ -51,25 +51,25 @@ def talker():
             truck_odom.pose.pose = cur_pose
             truck_odom_pub.publish(truck_odom)
             ## car small
-            if has_car_small:
+            if has_car_inner:
                 temp_pose = Pose()
-                car_small_ang = car_small_ang_vel * cnt * 0.02
-                temp_pose.position.x = car_small_radius * math.sin(car_small_ang)
-                temp_pose.position.y = -car_small_radius * math.cos(car_small_ang)
-                temp_pose.orientation.w = car_small_ang
+                car_inner_ang = car_inner_ang_vel * cnt * 0.02
+                temp_pose.position.x = car_inner_radius * math.sin(car_inner_ang)
+                temp_pose.position.y = -car_inner_radius * math.cos(car_inner_ang)
+                temp_pose.orientation.w = car_inner_ang
                 poses.poses.append(temp_pose)
-                car_small_odom.pose.pose = temp_pose
-                car_small_odom_pub.publish(car_small_odom)
+                car_inner_odom.pose.pose = temp_pose
+                car_inner_odom_pub.publish(car_inner_odom)
             ## car big
-            if has_car_big:
+            if has_car_outter:
                 temp_pose = Pose()
-                car_big_ang = car_big_ang_vel * cnt * 0.02
-                temp_pose.position.x = car_big_radius * math.sin(car_big_ang)
-                temp_pose.position.y = -car_big_radius * math.cos(car_big_ang)
-                temp_pose.orientation.w = car_big_ang
+                car_outter_ang = car_outter_ang_vel * cnt * 0.02
+                temp_pose.position.x = car_outter_radius * math.sin(car_outter_ang)
+                temp_pose.position.y = -car_outter_radius * math.cos(car_outter_ang)
+                temp_pose.orientation.w = car_outter_ang
                 poses.poses.append(temp_pose)
-                car_big_odom.pose.pose = temp_pose
-                car_big_odom_pub.publish(car_small_odom)
+                car_outter_odom.pose.pose = temp_pose
+                car_outter_odom_pub.publish(car_outter_odom)
 
             cars_poses_pub.publish(poses)
             cnt += 1
