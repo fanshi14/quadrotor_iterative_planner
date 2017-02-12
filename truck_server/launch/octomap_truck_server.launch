@@ -28,6 +28,8 @@
     <param name="car_inner_vel" value="4.17" />
   </node>
 
+  <!-- generate global bspline path message -->
+  <node pkg="bspline_ros" type="tinyspline_ros_node" name="bspline_ros" output="screen" />
 
   <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="truck_traj" output="screen">
     <param name="vehicle_traj_param_pub_topic_name" value="/truck_traj_param" />

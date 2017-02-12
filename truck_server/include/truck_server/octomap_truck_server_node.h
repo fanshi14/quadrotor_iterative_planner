@@ -104,6 +104,8 @@ public:
   void reconstructPath(int end_id);
   void reconstructedPathDisplay(int mode); // mode: 1, add display; -1, delete display
   inline void point3dConvertToPoint32(point3d point3, geometry_msgs::Point32& point32);
+  // test
+  void runAstarTest();
 };
 
 void TruckServerNode::onInit()
@@ -225,6 +227,8 @@ void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayCo
 
 void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
+  if (m_octo_publish_all_cnt == 0)
+    truck_.m_octree->clear();
   int traj_order = msg->layout.dim[0].size;
   std::vector<double> data;
   for (int i = 0; i < 2*traj_order+1; ++i)
@@ -242,7 +246,8 @@ void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArra
       vehicleCurrentPosVisualization(0);
       truck_.publishTruckAll(ros::Time().now());
       m_octo_publish_all_cnt = 0;
-      truck_.m_octree->clear();
+      // test
+      // runAstarTest();
     }
   }
 }
@@ -250,6 +255,8 @@ void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArra
 
 void TruckServerNode::carOutterTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
+  if (m_octo_publish_all_cnt == 0)
+    truck_.m_octree->clear();
   int traj_order = msg->layout.dim[0].size;
   std::vector<double> data;
   for (int i = 0; i < 2*traj_order+1; ++i)
@@ -266,8 +273,25 @@ void TruckServerNode::carOutterTrajParamCallback(const std_msgs::Float64MultiArr
       vehicleCurrentPosVisualization(0);
       truck_.publishTruckAll(ros::Time().now());
       m_octo_publish_all_cnt = 0;
-      truck_.m_octree->clear();
+      // test
+      //runAstarTest();
     }
+  }
+}
+
+
+void TruckServerNode::runAstarTest(){
+  ROS_INFO("AstarPathQuery");
+  // If alredy have diplay, delete previous display first.
+  if (astar_path_vec_.size() > 0)
+    reconstructedPathDisplay(-1);
+  double ang = -0.1 + m_truck_odom.pose.pose.orientation.w;
+  init_point = point3d(truck_.m_route_radius*sin(ang), -truck_.m_route_radius*cos(ang), 5);
+  land_point = point3d(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, m_truck_odom.pose.pose.position.z);
+  if (aStarSearch()){
+    ROS_INFO("Search finished");
+    reconstructedPathDisplay(1);
+    ROS_INFO("Display finished");
   }
 }
 
