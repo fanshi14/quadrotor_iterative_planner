@@ -20,7 +20,7 @@ using namespace octomap;
 using namespace octomath;
 class TruckOctomapServer: public OctomapServer {
 public:
-  TruckOctomapServer();
+  TruckOctomapServer(double resolution, int tree_depth);
   virtual ~TruckOctomapServer();
   float m_step_value;
   ros::Publisher m_pub_lane_marker;

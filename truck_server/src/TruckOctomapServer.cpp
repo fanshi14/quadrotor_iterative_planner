@@ -6,13 +6,14 @@ using namespace octomap;
 using namespace octomath;
 using namespace octomap_server;
 
-TruckOctomapServer::TruckOctomapServer() :
-  OctomapServer()
+TruckOctomapServer::TruckOctomapServer(double resolution, int tree_depth) :
+  OctomapServer(resolution, tree_depth)
 {
 
   ros::NodeHandle private_nh("~");
-
-  private_nh.param("resolution", m_res, 0.1);
+  // Shi
+  //private_nh.param("resolution", m_res, 0.1);
+  //private_nh.param("max_tree_depth", m_max_tree_depth, 10);
   private_nh.param("frame_id", m_worldFrameId, (std::string)"world");
   private_nh.param("route_name", m_route_name, (std::string)"track");
   private_nh.param("route_radius", m_route_radius, 20.0f);
@@ -24,7 +25,8 @@ TruckOctomapServer::~TruckOctomapServer() {}
 
 void TruckOctomapServer::init_param()
 {
-  m_octree->setResolution(m_res);
+  // Shi
+  //m_octree->setResolution(m_res);
 
   m_step_value = (float)m_res / 2.0f;
 
@@ -63,6 +65,13 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
       roof_size[0] = 1.5f; roof_size[1] = 1.5f; roof_size[2] = 1.0f;
       cargo_size[0] = 0.0f; cargo_size[1] = 0.0f; cargo_size[2] = 0.0f;
     }
+  // truck with out roof
+  else if (type == -1)
+    {
+      base_size[0] = 3.6f; base_size[1] = 1.6f; base_size[2] = 0.7f;
+      roof_size[0] = 0.0f; roof_size[1] = 0.0f; roof_size[2] = 0.0f;
+      cargo_size[0] = 0.0f; cargo_size[1] = 0.0f; cargo_size[2] = 0.0f;
+    }
   // sedan vehicle
   else if (type == 1)
     {
@@ -80,8 +89,11 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
 
   // For uav safety margin
   for (int i = 0; i < 3; ++i){
-    base_size[i] += 2*uav_safety_margin_size[i];
-    roof_size[i] += 2*uav_safety_margin_size[i];
+    // for truck without roof, base is the landing port
+    if (type != -1){
+      base_size[i] += 2*uav_safety_margin_size[i];
+      roof_size[i] += 2*uav_safety_margin_size[i];
+    }
     if (cargo_size[0] > 0.1)
       cargo_size[i] += 2*uav_safety_margin_size[i];
   }
@@ -158,7 +170,7 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
   m_octree->prune();
   m_octree->prune();
 
-  printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
+  //printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
 }
 
 
@@ -198,7 +210,6 @@ void TruckOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
     base_origin[i] = (int)round(base_size[i]/m_res);
     roof_origin[i] = (int)round(roof_size[i]/m_res);
     cargo_origin[i] = (int)round(cargo_size[i]/m_res);
-
     base_size[i] += uav_safety_margin_size[i];
     roof_size[i] += uav_safety_margin_size[i];
     if (cargo_size[0] > 0.1)
@@ -253,6 +264,7 @@ void TruckOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
 
 
   // Truck's roof above drivers
+  // truck without roof
   for (int x=0; x<roof[0]; x++) {
     for (int y=0; y<roof[1]; y++) {
       for (int z=0; z<roof[2]; z++) {

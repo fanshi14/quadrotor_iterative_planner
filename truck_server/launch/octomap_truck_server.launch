@@ -1,13 +1,16 @@
 <launch>
   <arg name="has_uav" default="true"/>
   <arg name="route" default="circle"/>
-  <arg name="radius" default="40.0"/>
+  <arg name="radius" default="36.0"/>
   <arg name="has_car_outter" default="true"/>
   <arg name="has_car_inner" default="true"/>
 
   <node pkg="truck_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
     <param name="resolution" value="0.1" />
+    <param name="tree_depth" value="10" />
     <param name="frame_id" type="string" value="world" />
+    <param name="has_car_inner" value="$(arg has_car_inner)" />
+    <param name="has_car_outter" value="$(arg has_car_outter)" />
     <!-- track or circle -->
     <param name="route_name" value="$(arg route)" />
     <param name="route_radius" value="$(arg radius)" />
@@ -24,8 +27,8 @@
     <param name="route_name" value="$(arg route)" />
     <param name="route_radius" value="$(arg radius)" />
     <param name="truck_vel" value="4.17" />
-    <param name="car_outter_vel" value="4.17" />
-    <param name="car_inner_vel" value="4.17" />
+    <param name="car_outter_vel" value="4.575" />
+    <param name="car_inner_vel" value="3.765" />
   </node>
 
   <!-- generate global bspline path message -->

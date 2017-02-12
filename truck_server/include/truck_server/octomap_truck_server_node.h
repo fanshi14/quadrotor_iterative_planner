@@ -69,6 +69,10 @@ public:
 
   int m_octo_publish_all_cnt;
 
+  double m_octomap_res;
+  int m_octomap_tree_depth;
+  double m_octomap_boarder_val;
+
   nav_msgs::Odometry m_truck_odom;
   nav_msgs::Odometry m_car_inner_odom;
   nav_msgs::Odometry m_car_outter_odom;
@@ -79,7 +83,8 @@ public:
   VehicleTrajectoryBase m_car_inner_traj_base;
   VehicleTrajectoryBase m_car_outter_traj_base;
 
-  TruckOctomapServer truck_;
+  TruckOctomapServer* m_truck_ptr;
+
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void laneMarkerCallback(const std_msgs::Empty msg);
@@ -95,8 +100,9 @@ public:
 
   void onInit();
   // return true if the grid is free
+  bool isInsideBoarder(point3d query_point);
   bool getGridCenter(point3d query_point, point3d& center_point, int depth);
-  void aStarSearchInit();
+  bool aStarSearchInit();
   bool aStarSearch();
   std::vector<aStarDataType>::iterator getPosItearator(double f_val, char ch);
   bool nodeInCloseSet(aStarDataType& node);
@@ -113,6 +119,8 @@ void TruckServerNode::onInit()
 
   ros::NodeHandle private_nh("~");
 
+  private_nh.param("resolution", m_octomap_res, 0.1);
+  private_nh.param("tree_depth", m_octomap_tree_depth, 16);
   private_nh.param("has_car_inner", m_has_car_inner, true);
   private_nh.param("has_car_outter", m_has_car_outter, true);
   private_nh.param("vehilce_inner_type", m_car_inner_type, 1);
@@ -121,9 +129,11 @@ void TruckServerNode::onInit()
   /* 0 is only visualize vehicles current position, 1 is visualize their future position with connected octomap. */
   private_nh.param("vehicle_octomap_visualize_mode", m_vehicle_octomap_visualize_mode, 0);
 
+  m_truck_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth);
 
   m_octomap_update_feq_cnt = 0;
   m_octo_publish_all_cnt = 0;
+  m_octomap_boarder_val = m_octomap_res * pow(2, m_octomap_tree_depth-1);
 
   /* Subscriber */
   sub_point_occupied_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_occupied", 10, &TruckServerNode::pointOccupiedQueryCallback, this);
@@ -155,7 +165,7 @@ void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3Con
   ROS_INFO("Query");
   std::cout << "query comes.\n";
   point3d query(msg->x, msg->y, msg->z);
-  OcTreeNode* result = truck_.m_octree->search (query);
+  OcTreeNode* result = m_truck_ptr->m_octree->search (query);
   if(result == NULL)
     {
       std::cout << "Free/Unknown point" << query << std::endl;
@@ -169,7 +179,7 @@ void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3Con
 
 void TruckServerNode::laneMarkerCallback(const std_msgs::Empty msg)
 {
-  truck_.laneMarkerVisualization();
+  m_truck_ptr->laneMarkerVisualization();
 }
 
 
@@ -180,21 +190,21 @@ void TruckServerNode::carsPosesCallback(const geometry_msgs::PoseArrayConstPtr& 
     ++m_octomap_update_feq_cnt;
     if (m_octomap_update_feq_cnt >= m_octomap_update_feq){
       m_octomap_update_feq_cnt = 0;
-      truck_.m_octree->clear();
+      m_truck_ptr->m_octree->clear();
 
       // x,y,z,r,p,y
       // todo: currently directly assign ang value to orientation.w
-      truck_.WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x+0.8, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
+      m_truck_ptr->WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x+0.8, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
       if (msg->poses.size() > 1){
-        truck_.WriteVehicleOctree(1, Pose6D(msg->poses[1].position.x, msg->poses[1].position.y, 0.0f, 0.0, 0.0, msg->poses[1].orientation.w));
-        truck_.WriteVehicleOctree(2, Pose6D(msg->poses[2].position.x, msg->poses[2].position.y, 0.0f, 0.0, 0.0, msg->poses[2].orientation.w));
-        // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
-        // truck_.WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
-        // truck_.WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
+        m_truck_ptr->WriteVehicleOctree(1, Pose6D(msg->poses[1].position.x, msg->poses[1].position.y, 0.0f, 0.0, 0.0, msg->poses[1].orientation.w));
+        m_truck_ptr->WriteVehicleOctree(2, Pose6D(msg->poses[2].position.x, msg->poses[2].position.y, 0.0f, 0.0, 0.0, msg->poses[2].orientation.w));
+        // m_truck_ptr->WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
+        // m_truck_ptr->WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
+        // m_truck_ptr->WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
       }
       /* Bridge obstacle */
-      //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
-      truck_.publishTruckAll(ros::Time().now());
+      //m_truck_ptr->WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
+      m_truck_ptr->publishTruckAll(ros::Time().now());
     }
   }
 }
@@ -204,13 +214,19 @@ void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
   // x,y,z,r,p,y
   // todo: currently directly assign ang value to orientation.w
   if (vehicle_type == 0){
-    truck_.WriteVehicleOctree(0, Pose6D(m_truck_odom.pose.pose.position.x+0.8, m_truck_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_truck_odom.pose.pose.orientation.w));
+    m_truck_ptr->WriteVehicleOctree(0, Pose6D(m_truck_odom.pose.pose.position.x+0.8, m_truck_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_truck_odom.pose.pose.orientation.w));
   }
+  // truck withour roof
+  else if (vehicle_type == -1){
+    m_truck_ptr->WriteVehicleOctree(-1, Pose6D(m_truck_odom.pose.pose.position.x+0.8, m_truck_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_truck_odom.pose.pose.orientation.w));
+  }
+  // small car
   else if (vehicle_type == 1){
-    truck_.WriteVehicleOctree(1, Pose6D(m_car_inner_odom.pose.pose.position.x+0.8, m_car_inner_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_car_inner_odom.pose.pose.orientation.w));
+    m_truck_ptr->WriteVehicleOctree(1, Pose6D(m_car_inner_odom.pose.pose.position.x+0.8, m_car_inner_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_car_inner_odom.pose.pose.orientation.w));
   }
+  // big car
   else if (vehicle_type == 2){
-    truck_.WriteVehicleOctree(2, Pose6D(m_car_outter_odom.pose.pose.position.x+0.8, m_car_outter_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_car_outter_odom.pose.pose.orientation.w));
+    m_truck_ptr->WriteVehicleOctree(2, Pose6D(m_car_outter_odom.pose.pose.position.x+0.8, m_car_outter_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_car_outter_odom.pose.pose.orientation.w));
   }
 }
 
@@ -228,7 +244,7 @@ void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayCo
 void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
   if (m_octo_publish_all_cnt == 0)
-    truck_.m_octree->clear();
+    m_truck_ptr->m_octree->clear();
   int traj_order = msg->layout.dim[0].size;
   std::vector<double> data;
   for (int i = 0; i < 2*traj_order+1; ++i)
@@ -239,15 +255,17 @@ void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArra
     for (int i = 0; i <=5; ++i){
       Vector3d vehicle_pos = m_car_inner_traj_base.nOrderVehicleTrajectory(0, i*1.0);
       Vector3d vehicle_vel = m_car_inner_traj_base.nOrderVehicleTrajectory(1, i*1.0);
-      truck_.WriteVehicleOctree(m_car_inner_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
+      m_truck_ptr->WriteVehicleOctree(m_car_inner_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
     }
     ++m_octo_publish_all_cnt;
     if (m_octo_publish_all_cnt >= 2){
-      vehicleCurrentPosVisualization(0);
-      truck_.publishTruckAll(ros::Time().now());
+      //vehicleCurrentPosVisualization(0);
+      // truck without roof
+      vehicleCurrentPosVisualization(-1);
+      m_truck_ptr->publishTruckAll(ros::Time().now());
       m_octo_publish_all_cnt = 0;
       // test
-      // runAstarTest();
+      //runAstarTest();
     }
   }
 }
@@ -256,7 +274,7 @@ void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArra
 void TruckServerNode::carOutterTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
   if (m_octo_publish_all_cnt == 0)
-    truck_.m_octree->clear();
+    m_truck_ptr->m_octree->clear();
   int traj_order = msg->layout.dim[0].size;
   std::vector<double> data;
   for (int i = 0; i < 2*traj_order+1; ++i)
@@ -266,12 +284,14 @@ void TruckServerNode::carOutterTrajParamCallback(const std_msgs::Float64MultiArr
     for (int i = 0; i <=5; ++i){
       Vector3d vehicle_pos = m_car_outter_traj_base.nOrderVehicleTrajectory(0, i*1.0);
       Vector3d vehicle_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, i*1.0);
-      truck_.WriteVehicleOctree(m_car_outter_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
+      m_truck_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
     }
     ++m_octo_publish_all_cnt;
     if (m_octo_publish_all_cnt >= 2){
-      vehicleCurrentPosVisualization(0);
-      truck_.publishTruckAll(ros::Time().now());
+      //vehicleCurrentPosVisualization(0);
+      // truck without roof
+      vehicleCurrentPosVisualization(-1);
+      m_truck_ptr->publishTruckAll(ros::Time().now());
       m_octo_publish_all_cnt = 0;
       // test
       //runAstarTest();
@@ -286,8 +306,10 @@ void TruckServerNode::runAstarTest(){
   if (astar_path_vec_.size() > 0)
     reconstructedPathDisplay(-1);
   double ang = -0.1 + m_truck_odom.pose.pose.orientation.w;
-  init_point = point3d(truck_.m_route_radius*sin(ang), -truck_.m_route_radius*cos(ang), 5);
-  land_point = point3d(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, m_truck_odom.pose.pose.position.z);
+  init_point = point3d(m_truck_ptr->m_route_radius*sin(ang), -m_truck_ptr->m_route_radius*cos(ang), 5);
+  Vector3d vehicle_pos = m_truck_traj_base.nOrderVehicleTrajectory(0, 5*1.0);
+  //land_point = point3d(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, m_truck_odom.pose.pose.position.z);
+  land_point = point3d(vehicle_pos[0], vehicle_pos[1], m_truck_odom.pose.pose.position.z);
   if (aStarSearch()){
     ROS_INFO("Search finished");
     reconstructedPathDisplay(1);
@@ -301,7 +323,7 @@ void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPt
   if (astar_path_vec_.size() > 0)
     reconstructedPathDisplay(-1);
   init_point = point3d(msg->x, msg->y, msg->z);
-  land_point = point3d(-1, -truck_.m_route_radius, 1.3);
+  land_point = point3d(0, -m_truck_ptr->m_route_radius, 0.8);
   if (aStarSearch()){
     ROS_INFO("Search finished");
     reconstructedPathDisplay(1);
@@ -315,8 +337,8 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
   std::cout << msg->x <<' ' << msg->y << ' ' << msg->z <<'\n';
   // Depth from 1 to 16
   int cur_depth;
-  OcTreeNode* result = truck_.m_octree->searchReturnDepth (query, 0, cur_depth);
-  double cube_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-cur_depth);
+  OcTreeNode* result = m_truck_ptr->m_octree->searchReturnDepth (query, 0, cur_depth);
+  double cube_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-cur_depth);
   std::cout << "Point is " << cur_depth << "\n";
   if (result == NULL)
     std::cout << "Unknown/free region.\n";
@@ -399,8 +421,8 @@ void TruckServerNode::reconstructedPathDisplay(int mode){
 
   for (int i = points_num-1; i >=0 ; --i){
     int cur_depth;
-    truck_.m_octree->searchReturnDepth(astar_path_vec_[i], 0, cur_depth);
-    double cube_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-cur_depth);
+    m_truck_ptr->m_octree->searchReturnDepth(astar_path_vec_[i], 0, cur_depth);
+    double cube_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-cur_depth);
     // if (result == NULL)
     //   std::cout << "Unknown/free region.\n";
     // else
@@ -489,29 +511,46 @@ void TruckServerNode::reconstructedPathDisplay(int mode){
     pub_path_grid_points_.publish(path_grid_points);
 }
 
+bool TruckServerNode::isInsideBoarder(point3d query_point)
+{
+  if (query_point.x() >= m_octomap_boarder_val || query_point.x() <= -m_octomap_boarder_val
+      || query_point.y() >= m_octomap_boarder_val || query_point.y() <= -m_octomap_boarder_val
+      ||query_point.z() >= m_octomap_boarder_val || query_point.z() <= -m_octomap_boarder_val)
+    return false;
+  else
+    return true;
+}
+
 bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, int depth)
 {
   bool isGridFree = true;
+
+  if (!isInsideBoarder(query_point)){
+    isGridFree = false;
+    return false;
+  }
+
   // when not have prior knowledge of depth, assign depth as -1
   if (depth == -1)
     {
-      OcTreeNode* result = truck_.m_octree->searchReturnDepth(query_point, 0, depth);
+      OcTreeNode* result = m_truck_ptr->m_octree->searchReturnDepth(query_point, 0, depth);
       if (result != NULL)
         isGridFree = false;
     }
-  key_type key_x = truck_.m_octree->coordToKey(query_point.x(), depth);
-  key_type key_y = truck_.m_octree->coordToKey(query_point.y(), depth);
-  key_type key_z = truck_.m_octree->coordToKey(query_point.z(), depth);
-  double center_x = truck_.m_octree->keyToCoord(key_x, depth);
-  double center_y = truck_.m_octree->keyToCoord(key_y, depth);
-  double center_z = truck_.m_octree->keyToCoord(key_z, depth);
+
+  key_type key_x = m_truck_ptr->m_octree->coordToKey(query_point.x(), depth);
+  key_type key_y = m_truck_ptr->m_octree->coordToKey(query_point.y(), depth);
+  key_type key_z = m_truck_ptr->m_octree->coordToKey(query_point.z(), depth);
+  double center_x = m_truck_ptr->m_octree->keyToCoord(key_x, depth);
+  double center_y = m_truck_ptr->m_octree->keyToCoord(key_y, depth);
+  double center_z = m_truck_ptr->m_octree->keyToCoord(key_z, depth);
   center_point.x() = center_x;
   center_point.y() = center_y;
   center_point.z() = center_z;
   return isGridFree;
 }
 
-void TruckServerNode::aStarSearchInit()
+bool TruckServerNode::aStarSearchInit()
 {
   data_set_num_ = 0;
   data_set_vec_.clear();
@@ -520,11 +559,14 @@ void TruckServerNode::aStarSearchInit()
   astar_path_vec_.clear();
 
   point3d start_point;
-  getGridCenter(init_point, start_point, -1);
+  if (!getGridCenter(init_point, start_point, -1)){
+    ROS_ERROR("Init astar search point is not available.");
+    return false;
+  }
   int start_node_depth;
-  truck_.m_octree->searchReturnDepth(start_point, 0, start_node_depth);
-  double start_grid_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-start_node_depth);
-  double neighbor_grid_gap = start_grid_size/2.0 + truck_.m_octree->resolution/2.0;
+  m_truck_ptr->m_octree->searchReturnDepth(start_point, 0, start_node_depth);
+  double start_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-start_node_depth);
+  double neighbor_grid_gap = start_grid_size/2.0 + m_truck_ptr->m_octree->resolution/2.0;
   for (int x = -1; x <= 1; ++x)
     for (int y = -1; y <= 1; ++y)
       for (int z = -1; z <= 1; ++z)
@@ -556,14 +598,22 @@ void TruckServerNode::aStarSearchInit()
               //astar_path_vec_.push_back(neighbor_center_point);
             }
         }
+  return true;
 }
 
 
 bool TruckServerNode::aStarSearch()
 {
-  aStarSearchInit();
+  if (!aStarSearchInit()){
+    ROS_INFO("A Star Search failed!!");
+    return false;
+  }
   point3d end_point;
-  getGridCenter(land_point, end_point, -1);
+  if (!getGridCenter(land_point, end_point, -1)){
+    ROS_ERROR("Land point is not available.");
+    ROS_INFO("A Star Search failed!!");
+    return false;
+  }
 
   while (!open_set_vec_.empty())
     {
@@ -583,9 +633,9 @@ bool TruckServerNode::aStarSearch()
       open_set_vec_.erase(open_set_vec_.begin());
 
       int start_octree_node_depth;
-      truck_.m_octree->searchReturnDepth(start_point, 0, start_octree_node_depth);
-      double start_grid_size = truck_.m_octree->resolution * pow(2, truck_.m_octree->tree_depth-start_octree_node_depth);
-      double neighbor_grid_gap = start_grid_size/2.0 + truck_.m_octree->resolution/2.0;
+      m_truck_ptr->m_octree->searchReturnDepth(start_point, 0, start_octree_node_depth);
+      double start_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-start_octree_node_depth);
+      double neighbor_grid_gap = start_grid_size/2.0 + m_truck_ptr->m_octree->resolution/2.0;
       for (int x = -1; x <= 1; ++x)
         for (int y = -1; y <= 1; ++y)
           for (int z = -1; z <= 1; ++z)
