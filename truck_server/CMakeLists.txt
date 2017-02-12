@@ -16,6 +16,7 @@ set(PACKAGE_DEPENDENCIES
   nodelet
   octomap_server
   geometry_msgs
+  quadrotor_trajectory
 )
 
 
@@ -31,6 +32,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
   ${OCTOMAP_INCLUDE_DIRS}
+  ${QUADROTOR_TRAJECTORY_INCLUDE_DIRS}
 )
 
 
@@ -47,6 +49,7 @@ set(LINK_LIBS
   ${OCTOMAP_LIBRARIES}
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${QUADROTOR_TRAJECTORY_LIBRARIES}
 )
 
 add_library(${PROJECT_NAME} src/TruckOctomapServer.cpp)

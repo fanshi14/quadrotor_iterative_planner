@@ -7,12 +7,17 @@
 #include <geometry_msgs/PolygonStamped.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/Pose.h>
+#include <nav_msgs/Odometry.h>
 #include <std_msgs/Empty.h>
+#include <std_msgs/Float64.h>
+#include <std_msgs/Float64MultiArray.h>
 #include <iostream>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <quadrotor_trajectory/VehicleTrajectoryBase.h>
 
 using namespace octomap_server;
+using namespace vehicle_trajectory_base;
 
 struct aStarDataType
 {
@@ -38,6 +43,12 @@ public:
   ros::Subscriber sub_point_depth_query_;
   ros::Subscriber sub_astar_query_;
   ros::Subscriber sub_cars_poses_;
+  ros::Subscriber sub_truck_traj_param_;
+  ros::Subscriber sub_car_small_traj_param_;
+  ros::Subscriber sub_car_big_traj_param_;
+  ros::Subscriber sub_truck_odom_;
+  ros::Subscriber sub_car_small_odom_;
+  ros::Subscriber sub_car_big_odom_;
 
   ros::Publisher pub_point_octocube_;
   ros::Publisher pub_reconstructed_path_markers_;
@@ -49,8 +60,22 @@ public:
   point3d init_point, land_point;
   float spline_res;
 
+  bool m_has_car_small;
+  bool m_has_car_big;
+
   int m_octomap_update_feq;
   int m_octomap_update_feq_cnt;
+  int m_vehicle_octomap_visualize_mode;
+
+  int m_octo_publish_all_cnt;
+
+  nav_msgs::Odometry m_truck_odom;
+  nav_msgs::Odometry m_car_small_odom;
+  nav_msgs::Odometry m_car_big_odom;
+
+  VehicleTrajectoryBase m_truck_traj_base;
+  VehicleTrajectoryBase m_car_small_traj_base;
+  VehicleTrajectoryBase m_car_big_traj_base;
 
   TruckOctomapServer truck_;
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
@@ -58,6 +83,13 @@ public:
   void laneMarkerCallback(const std_msgs::Empty msg);
   void astarPathQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void carsPosesCallback(const geometry_msgs::PoseArrayConstPtr& msg);
+  void truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg);
+  void carSmallTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg);
+  void carBigTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg);
+  void truckOdomCallback(const nav_msgs::OdometryConstPtr& msg);
+  void carSmallOdomCallback(const nav_msgs::OdometryConstPtr& msg);
+  void carBigOdomCallback(const nav_msgs::OdometryConstPtr& msg);
+  void vehicleCurrentPosVisualization(int vehicle_type);
 
   void onInit();
   // return true if the grid is free
@@ -77,18 +109,30 @@ void TruckServerNode::onInit()
 
   ros::NodeHandle private_nh("~");
 
+  private_nh.param("has_car_small", m_has_car_small, true);
+  private_nh.param("has_car_big", m_has_car_big, true);
   private_nh.param("octomap_update_rate", m_octomap_update_feq, 1);
+  /* 0 is only visualize vehicles current position, 1 is visualize their future position with connected octomap. */
+  private_nh.param("vehicle_octomap_visualize_mode", m_vehicle_octomap_visualize_mode, 0);
 
 
   m_octomap_update_feq_cnt = 0;
+  m_octo_publish_all_cnt = 0;
 
+  /* Subscriber */
   sub_point_occupied_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_occupied", 10, &TruckServerNode::pointOccupiedQueryCallback, this);
   sub_lane_marker_flag_ = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
   sub_point_depth_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_depth", 1, &TruckServerNode::pointDepthQueryCallback, this);
   sub_astar_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_astar_path", 1, &TruckServerNode::astarPathQueryCallback, this);
   sub_cars_poses_ = nh_.subscribe<geometry_msgs::PoseArray>("/cars_poses", 1, &TruckServerNode::carsPosesCallback, this);
+  sub_truck_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/truck_traj_param", 1, &TruckServerNode::truckTrajParamCallback, this);
+  sub_car_small_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/car_small_traj_param", 1, &TruckServerNode::carSmallTrajParamCallback, this);
+  sub_car_big_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/car_big_traj_param", 1, &TruckServerNode::carBigTrajParamCallback, this);
+  sub_truck_odom_ = nh_.subscribe<nav_msgs::Odometry>("/truck_odom", 1, &TruckServerNode::truckOdomCallback, this);
+  sub_car_small_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_small_odom", 1, &TruckServerNode::carSmallOdomCallback, this);
+  sub_car_big_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_big_odom", 1, &TruckServerNode::carBigOdomCallback, this);
 
-
+  /* Publisher */
   pub_point_octocube_ = nh_.advertise<visualization_msgs::Marker>("octo_cube_marker", 1);
   pub_reconstructed_path_markers_ = nh_.advertise<visualization_msgs::MarkerArray>("reconstructed_path_markers", 1);
   pub_path_grid_points_  = nh_.advertise<geometry_msgs::PolygonStamped>("path_gird_points", 1);
@@ -125,24 +169,101 @@ void TruckServerNode::laneMarkerCallback(const std_msgs::Empty msg)
 
 void TruckServerNode::carsPosesCallback(const geometry_msgs::PoseArrayConstPtr& msg)
 {
-  ++m_octomap_update_feq_cnt;
-  if (m_octomap_update_feq_cnt >= m_octomap_update_feq){
-    m_octomap_update_feq_cnt = 0;
-    truck_.m_octree->clear();
+  /* Visualize separate vehicles current position in octomap, do not visualize its future position with connected octomap. */
+  if (m_vehicle_octomap_visualize_mode == 0){
+    ++m_octomap_update_feq_cnt;
+    if (m_octomap_update_feq_cnt >= m_octomap_update_feq){
+      m_octomap_update_feq_cnt = 0;
+      truck_.m_octree->clear();
 
-    // x,y,z,r,p,y
-    // todo: currently directly assign ang value to orientation.w
-    truck_.WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x+0.8, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
-    if (msg->poses.size() > 1){
-      truck_.WriteVehicleOctree(1, Pose6D(msg->poses[1].position.x, msg->poses[1].position.y, 0.0f, 0.0, 0.0, msg->poses[1].orientation.w));
-      truck_.WriteVehicleOctree(2, Pose6D(msg->poses[2].position.x, msg->poses[2].position.y, 0.0f, 0.0, 0.0, msg->poses[2].orientation.w));
-      // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
-      // truck_.WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
-      // truck_.WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
+      // x,y,z,r,p,y
+      // todo: currently directly assign ang value to orientation.w
+      truck_.WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x+0.8, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
+      if (msg->poses.size() > 1){
+        truck_.WriteVehicleOctree(1, Pose6D(msg->poses[1].position.x, msg->poses[1].position.y, 0.0f, 0.0, 0.0, msg->poses[1].orientation.w));
+        truck_.WriteVehicleOctree(2, Pose6D(msg->poses[2].position.x, msg->poses[2].position.y, 0.0f, 0.0, 0.0, msg->poses[2].orientation.w));
+        // truck_.WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
+        // truck_.WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
+        // truck_.WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
+      }
+      /* Bridge obstacle */
+      //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
+      truck_.publishTruckAll(ros::Time().now());
     }
-    /* Bridge obstacle */
-    //truck_.WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
-    truck_.publishTruckAll(ros::Time().now());
+  }
+}
+
+void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
+{
+  // x,y,z,r,p,y
+  // todo: currently directly assign ang value to orientation.w
+  if (vehicle_type == 0){
+    truck_.WriteVehicleOctree(0, Pose6D(m_truck_odom.pose.pose.position.x+0.8, m_truck_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_truck_odom.pose.pose.orientation.w));
+  }
+  else if (vehicle_type == 1){
+    truck_.WriteVehicleOctree(1, Pose6D(m_car_small_odom.pose.pose.position.x+0.8, m_car_small_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_car_small_odom.pose.pose.orientation.w));
+  }
+  else if (vehicle_type == 2){
+    truck_.WriteVehicleOctree(2, Pose6D(m_car_big_odom.pose.pose.position.x+0.8, m_car_big_odom.pose.pose.position.y, 0.0f, 0.0, 0.0, m_car_big_odom.pose.pose.orientation.w));
+  }
+}
+
+
+void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
+{
+  int traj_order = msg->layout.dim[0].size;
+  std::vector<double> data;
+  for (int i = 0; i < 2*traj_order+1; ++i)
+    data.push_back(msg->data[i]);
+  m_truck_traj_base.onInit(traj_order, data);
+}
+
+
+void TruckServerNode::carSmallTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
+{
+  int traj_order = msg->layout.dim[0].size;
+  std::vector<double> data;
+  for (int i = 0; i < 2*traj_order+1; ++i)
+    data.push_back(msg->data[i]);
+  m_car_small_traj_base.onInit(traj_order, data);
+
+  if (m_vehicle_octomap_visualize_mode == 1){
+    for (int i = 0; i <=5; ++i){
+      Vector3d vehicle_pos = m_car_small_traj_base.nOrderVehicleTrajectory(0, i*1.0);
+      Vector3d vehicle_vel = m_car_small_traj_base.nOrderVehicleTrajectory(1, i*1.0);
+      truck_.WriteVehicleOctree(1, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
+    }
+    ++m_octo_publish_all_cnt;
+    if (m_octo_publish_all_cnt >= 2){
+      vehicleCurrentPosVisualization(0);
+      truck_.publishTruckAll(ros::Time().now());
+      m_octo_publish_all_cnt = 0;
+      truck_.m_octree->clear();
+    }
+  }
+}
+
+
+void TruckServerNode::carBigTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
+{
+  int traj_order = msg->layout.dim[0].size;
+  std::vector<double> data;
+  for (int i = 0; i < 2*traj_order+1; ++i)
+    data.push_back(msg->data[i]);
+  m_car_big_traj_base.onInit(traj_order, data);
+  if (m_vehicle_octomap_visualize_mode == 1){
+    for (int i = 0; i <=5; ++i){
+      Vector3d vehicle_pos = m_car_big_traj_base.nOrderVehicleTrajectory(0, i*1.0);
+      Vector3d vehicle_vel = m_car_big_traj_base.nOrderVehicleTrajectory(1, i*1.0);
+      truck_.WriteVehicleOctree(1, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
+    }
+    ++m_octo_publish_all_cnt;
+    if (m_octo_publish_all_cnt >= 2){
+      vehicleCurrentPosVisualization(0);
+      truck_.publishTruckAll(ros::Time().now());
+      m_octo_publish_all_cnt = 0;
+      truck_.m_octree->clear();
+    }
   }
 }
 
@@ -555,4 +676,19 @@ inline void TruckServerNode::point3dConvertToPoint32(point3d point3, geometry_ms
   point32.x = point3.x();
   point32.y = point3.y();
   point32.z = point3.z();
+}
+
+void TruckServerNode::truckOdomCallback(const nav_msgs::OdometryConstPtr& msg)
+{
+  m_truck_odom = *msg;
+}
+
+void TruckServerNode::carSmallOdomCallback(const nav_msgs::OdometryConstPtr& msg)
+{
+  m_car_small_odom = *msg;
+}
+
+void TruckServerNode::carBigOdomCallback(const nav_msgs::OdometryConstPtr& msg)
+{
+  m_car_big_odom = *msg;
 }

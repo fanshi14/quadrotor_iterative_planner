@@ -13,6 +13,7 @@
     <param name="route_radius" value="$(arg radius)" />
     <param name="truck_odom_sub_topic_name" value="/truck_odom" />
     <param name="octomap_update_rate" value="50" />
+    <param name="vehicle_octomap_visualize_mode" value="1" />
   </node>
 
   <node pkg="truck_server" type="sim_cars_poses_pub.py" name="sim_cars_poses_pub" output="screen">
@@ -25,6 +26,21 @@
     <param name="car_small_vel" value="4.17" />
   </node>
 
+
+  <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="truck_traj" output="screen">
+    <param name="vehicle_odom_sub_topic_name" value="/truck_odom" />
+    <param name="vehicle_traj_param_pub_topic_name" value="/truck_traj_param" />
+    <param name="vehicle_traj_path_pub_topic_name" value="/truck_traj_path" />
+    <param name="vehicle_traj_polynomial_order" value="8" />
+    <param name="vehicle_traj_derivation_order" value="4" />
+    <param name="vehicle_lambda_D" value="1.0" />
+    <param name="vehicle_estimate_odom_number" value="40" />
+    <param name="vehicle_trajectory_generate_freqency" value="50" />
+    <param name="vehicle_visualization_predict_time" value="5.0" />
+    <param name="vehicle_visualization_preview_time" value="2.0" />
+    <param name="param_output_param" value="false" />
+  </node>
+
   <group if="$(arg has_car_small)">
     <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="car_small_traj" output="screen">
       <param name="vehicle_odom_sub_topic_name" value="/car_small_odom" />
@@ -34,7 +50,7 @@
       <param name="vehicle_traj_derivation_order" value="4" />
       <param name="vehicle_lambda_D" value="1.0" />
       <param name="vehicle_estimate_odom_number" value="40" />
-      <param name="vehicle_trajectory_generate_freqency" value="3" />
+      <param name="vehicle_trajectory_generate_freqency" value="50" />
       <param name="vehicle_visualization_predict_time" value="5.0" />
       <param name="vehicle_visualization_preview_time" value="2.0" />
       <param name="param_output_param" value="false" />
@@ -50,26 +66,12 @@
       <param name="vehicle_traj_derivation_order" value="4" />
       <param name="vehicle_lambda_D" value="1.0" />
       <param name="vehicle_estimate_odom_number" value="40" />
-      <param name="vehicle_trajectory_generate_freqency" value="3" />
+      <param name="vehicle_trajectory_generate_freqency" value="50" />
       <param name="vehicle_visualization_predict_time" value="5.0" />
       <param name="vehicle_visualization_preview_time" value="2.0" />
       <param name="param_output_param" value="false" />
     </node>
   </group>
-
-  <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="truck_traj" output="screen">
-    <param name="vehicle_odom_sub_topic_name" value="/truck_odom" />
-    <param name="vehicle_traj_param_pub_topic_name" value="/truck_traj_param" />
-    <param name="vehicle_traj_path_pub_topic_name" value="/truck_traj_path" />
-    <param name="vehicle_traj_polynomial_order" value="8" />
-    <param name="vehicle_traj_derivation_order" value="4" />
-    <param name="vehicle_lambda_D" value="1.0" />
-    <param name="vehicle_estimate_odom_number" value="40" />
-    <param name="vehicle_trajectory_generate_freqency" value="3" />
-    <param name="vehicle_visualization_predict_time" value="5.0" />
-    <param name="vehicle_visualization_preview_time" value="2.0" />
-    <param name="param_output_param" value="false" />
-  </node>
 
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(find truck_server)/config/truck_octomap.rviz" />
   <node pkg="truck_server" type="lane_marker_flag.py" name="lane_marker_flag" />
