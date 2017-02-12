@@ -45,6 +45,7 @@ def talker():
             truck_ang = truck_ang_vel * cnt * 0.02
             cur_pose.position.x = truck_radius * math.sin(truck_ang)
             cur_pose.position.y = -truck_radius * math.cos(truck_ang)
+            cur_pose.position.z = 0.8
             cur_pose.orientation.w = truck_ang
             poses.poses.append(cur_pose)
             truck_odom.pose.pose = cur_pose
