@@ -132,7 +132,7 @@ void TruckServerNode::carsPosesCallback(const geometry_msgs::PoseArrayConstPtr& 
 
     // x,y,z,r,p,y
     // todo: currently directly assign ang value to orientation.w
-    truck_.WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
+    truck_.WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x+0.8, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
     if (msg->poses.size() > 1){
       truck_.WriteVehicleOctree(1, Pose6D(msg->poses[1].position.x, msg->poses[1].position.y, 0.0f, 0.0, 0.0, msg->poses[1].orientation.w));
       truck_.WriteVehicleOctree(2, Pose6D(msg->poses[2].position.x, msg->poses[2].position.y, 0.0f, 0.0, 0.0, msg->poses[2].orientation.w));
