@@ -78,6 +78,9 @@ public:
   nav_msgs::Odometry m_truck_odom;
   nav_msgs::Odometry m_car_inner_odom;
   nav_msgs::Odometry m_car_outter_odom;
+  double m_truck_traj_recv_time;
+  double m_car_inner_traj_recv_time;
+  double m_car_outter_traj_recv_time;
   int m_car_inner_type;
   int m_car_outter_type;
 
@@ -137,6 +140,10 @@ void TruckServerNode::onInit()
   m_octomap_update_feq_cnt = 0;
   m_octo_publish_all_cnt = 0;
   m_octomap_boarder_val = m_octomap_res * pow(2, m_octomap_tree_depth-1);
+
+  m_truck_traj_recv_time = -1;
+  m_car_outter_traj_recv_time = -1;
+  m_car_inner_traj_recv_time = -1;
 
   /* Subscriber */
   sub_point_occupied_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_occupied", 10, &TruckServerNode::pointOccupiedQueryCallback, this);
@@ -236,16 +243,31 @@ void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
 
 void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
-  int traj_order = msg->layout.dim[0].size;
-  std::vector<double> data;
-  for (int i = 0; i < 2*traj_order+1; ++i)
-    data.push_back(msg->data[i]);
-  m_truck_traj_base.onInit(traj_order, data);
+  double cur_time = ros::Time().now().toSec();
+  if (m_truck_traj_recv_time < 0)
+    m_truck_traj_recv_time = cur_time;
+  else if (cur_time - m_truck_traj_recv_time > 1.0){
+    m_truck_traj_recv_time = cur_time;
+    int traj_order = msg->layout.dim[0].size;
+    std::vector<double> data;
+    for (int i = 0; i < 2*traj_order+1; ++i)
+      data.push_back(msg->data[i]);
+    m_truck_traj_base.onInit(traj_order, data);
+  }
 }
 
 
 void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
+  double cur_time = ros::Time().now().toSec();
+  if (m_car_inner_traj_recv_time < 0){
+    m_car_inner_traj_recv_time = cur_time;
+    return;
+  }
+  else if (cur_time - m_car_inner_traj_recv_time < 1.0)
+    return;
+  m_car_inner_traj_recv_time = cur_time;
+
   if (m_octo_publish_all_cnt == 0)
     m_truck_ptr->m_octree->clear();
   int traj_order = msg->layout.dim[0].size;
@@ -276,6 +298,15 @@ void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArra
 
 void TruckServerNode::carOutterTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
+  double cur_time = ros::Time().now().toSec();
+  if (m_car_outter_traj_recv_time < 0){
+    m_car_outter_traj_recv_time = cur_time;
+    return;
+  }
+  else if (cur_time - m_car_outter_traj_recv_time < 1.0)
+    return;
+  m_car_outter_traj_recv_time = cur_time;
+
   if (m_octo_publish_all_cnt == 0)
     m_truck_ptr->m_octree->clear();
   int traj_order = msg->layout.dim[0].size;

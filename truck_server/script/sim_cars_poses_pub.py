@@ -16,14 +16,15 @@ def talker():
     truck_vel = rospy.get_param("~truck_vel", 4.17)
     car_inner_vel = rospy.get_param("~car_inner_vel", 4.17)
     car_outter_vel = rospy.get_param("~car_outter_vel", 4.17)
+    lane_width = rospy.get_param("~lane_width", 3.7)
 
     cars_poses_pub = rospy.Publisher('/cars_poses', PoseArray, queue_size=1)
     truck_odom_pub = rospy.Publisher('/truck_odom', Odometry, queue_size=1)
     car_inner_odom_pub = rospy.Publisher('/car_inner_odom', Odometry, queue_size=1)
     car_outter_odom_pub = rospy.Publisher('/car_outter_odom', Odometry, queue_size=1)
 
-    car_inner_radius = route_radius - 3.5
-    car_outter_radius = route_radius + 3.5
+    car_inner_radius = route_radius - lane_width
+    car_outter_radius = route_radius + lane_width
     truck_radius = route_radius
 
     print "Route name: ", route_name

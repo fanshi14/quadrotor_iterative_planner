@@ -43,7 +43,7 @@
     <param name="vehicle_traj_derivation_order" value="4" />
     <param name="vehicle_lambda_D" value="1.0" />
     <param name="vehicle_estimate_odom_number" value="40" />
-    <param name="vehicle_trajectory_generate_freqency" value="50" />
+    <param name="vehicle_trajectory_generate_freqency" value="5" />
     <param name="vehicle_visualization_predict_time" value="5.0" />
     <param name="vehicle_visualization_preview_time" value="2.0" />
     <param name="param_output_param" value="false" />
@@ -58,7 +58,7 @@
       <param name="vehicle_traj_derivation_order" value="4" />
       <param name="vehicle_lambda_D" value="1.0" />
       <param name="vehicle_estimate_odom_number" value="40" />
-      <param name="vehicle_trajectory_generate_freqency" value="50" />
+      <param name="vehicle_trajectory_generate_freqency" value="5" />
       <param name="vehicle_visualization_predict_time" value="5.0" />
       <param name="vehicle_visualization_preview_time" value="2.0" />
       <param name="param_output_param" value="false" />
@@ -75,7 +75,7 @@
       <param name="vehicle_traj_derivation_order" value="4" />
       <param name="vehicle_lambda_D" value="1.0" />
       <param name="vehicle_estimate_odom_number" value="40" />
-      <param name="vehicle_trajectory_generate_freqency" value="50" />
+      <param name="vehicle_trajectory_generate_freqency" value="5" />
       <param name="vehicle_visualization_predict_time" value="5.0" />
       <param name="vehicle_visualization_preview_time" value="2.0" />
       <param name="param_output_param" value="false" />

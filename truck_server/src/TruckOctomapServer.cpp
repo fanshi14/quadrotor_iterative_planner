@@ -76,15 +76,15 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
   else if (type == 1)
     {
       base_size[0] = 4.8f; base_size[1] = 2.0f; base_size[2] = 0.8f;
-      roof_size[0] = 2.4f; roof_size[1] = 2.0f; roof_size[2] = 0.9f;
+      roof_size[0] = 3.0f; roof_size[1] = 2.0f; roof_size[2] = 0.9f;
       cargo_size[0] = 0.0f; cargo_size[1] = 0.0f; cargo_size[2] = 0.0f;
     }
   // big truck
   else if (type == 2)
     {
-      base_size[0] = 10.0f; base_size[1] = 2.4f; base_size[2] = 1.4f;
+      base_size[0] = 6.0f; base_size[1] = 2.4f; base_size[2] = 1.4f;
       roof_size[0] = 2.1f; roof_size[1] = 2.4f; roof_size[2] = 1.2f;
-      cargo_size[0] = 7.4f; cargo_size[1] = 2.4f; cargo_size[2] = 3.0f;
+      cargo_size[0] = 7.4f; cargo_size[1] = 2.4f; cargo_size[2] = 2.0f;
     }
 
   // For uav safety margin
