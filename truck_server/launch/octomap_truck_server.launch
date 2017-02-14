@@ -11,6 +11,8 @@
     <param name="frame_id" type="string" value="world" />
     <param name="has_car_inner" value="$(arg has_car_inner)" />
     <param name="has_car_outter" value="$(arg has_car_outter)" />
+    <param name="ARA_rate" value="1.0" />
+
     <!-- track or circle -->
     <param name="route_name" value="$(arg route)" />
     <param name="route_radius" value="$(arg radius)" />
