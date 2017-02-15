@@ -74,6 +74,8 @@ public:
   double m_octomap_boarder_val;
 
   double m_ara_star_rate;
+  int m_graph_connected_mode;
+  std::vector<Vector3d> m_seach_graph_connected_map;
 
   nav_msgs::Odometry m_truck_odom;
   nav_msgs::Odometry m_car_inner_odom;
@@ -104,6 +106,7 @@ public:
   void vehicleCurrentPosVisualization(int vehicle_type);
 
   void onInit();
+  void aStarSearchGraphInit();
   // return true if the grid is free
   bool isInsideBoarder(point3d query_point);
   bool getGridCenter(point3d query_point, point3d& center_point, int depth);
@@ -132,6 +135,8 @@ void TruckServerNode::onInit()
   private_nh.param("vehilce_outter_type", m_car_outter_type, 2);
   private_nh.param("octomap_update_rate", m_octomap_update_feq, 1);
   private_nh.param("ARA_rate", m_ara_star_rate, 1.0);
+  private_nh.param("graph_connected_mode", m_graph_connected_mode, 27);
+
   /* 0 is only visualize vehicles current position, 1 is visualize their future position with connected octomap. */
   private_nh.param("vehicle_octomap_visualize_mode", m_vehicle_octomap_visualize_mode, 0);
 
@@ -144,6 +149,8 @@ void TruckServerNode::onInit()
   m_truck_traj_recv_time = -1;
   m_car_outter_traj_recv_time = -1;
   m_car_inner_traj_recv_time = -1;
+
+  aStarSearchGraphInit();
 
   /* Subscriber */
   sub_point_occupied_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_occupied", 10, &TruckServerNode::pointOccupiedQueryCallback, this);
@@ -601,38 +608,35 @@ bool TruckServerNode::aStarSearchInit()
   m_truck_ptr->m_octree->searchReturnDepth(start_point, 0, start_node_depth);
   double start_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-start_node_depth);
   double neighbor_grid_gap = start_grid_size/2.0 + m_truck_ptr->m_octree->resolution/2.0;
-  for (int x = -1; x <= 1; ++x)
-    for (int y = -1; y <= 1; ++y)
-      for (int z = -1; z <= 1; ++z)
-        {
-          point3d neighbor_center_point;
-          if (getGridCenter((start_point + point3d(neighbor_grid_gap*x,
-                                                   neighbor_grid_gap*y,
-                                                   neighbor_grid_gap*z)),
-                            neighbor_center_point, -1))
-            {
-              if (neighbor_center_point.z() < 0)
-                continue;
-              aStarDataType new_astar_node;
-              new_astar_node.prev_id = -1;
-              new_astar_node.id = data_set_num_;
-              new_astar_node.pos = neighbor_center_point;
-              new_astar_node.g_val = m_init_point.distance(neighbor_center_point);
-              // Euclidean distance
-              //new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
-              // Manhattan distance
-              new_astar_node.h_val = m_ara_star_rate *
-                (fabs(neighbor_center_point.x()-m_land_point.x())
-                 + fabs(neighbor_center_point.y()-m_land_point.y())
-                 + fabs(neighbor_center_point.z()-m_land_point.z()));
-              new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
-              open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
-              data_set_vec_.push_back(new_astar_node);
-              ++data_set_num_;
-              //test
-              //astar_path_vec_.push_back(neighbor_center_point);
-            }
-        }
+  for (int i = 0; i < m_graph_connected_mode; ++i){
+    point3d neighbor_center_point;
+    Vector3d index = m_seach_graph_connected_map[i];
+    if (getGridCenter((start_point + point3d(neighbor_grid_gap*index[0],
+                                             neighbor_grid_gap*index[1],
+                                             neighbor_grid_gap*index[2])),
+                      neighbor_center_point, -1)){
+      if (neighbor_center_point.z() < 0)
+        continue;
+      aStarDataType new_astar_node;
+      new_astar_node.prev_id = -1;
+      new_astar_node.id = data_set_num_;
+      new_astar_node.pos = neighbor_center_point;
+      new_astar_node.g_val = m_init_point.distance(neighbor_center_point);
+      // Euclidean distance
+      //new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
+      // Manhattan distance
+      new_astar_node.h_val = m_ara_star_rate *
+        (fabs(neighbor_center_point.x()-m_land_point.x())
+         + fabs(neighbor_center_point.y()-m_land_point.y())
+         + fabs(neighbor_center_point.z()-m_land_point.z()));
+      new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
+      open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
+      data_set_vec_.push_back(new_astar_node);
+      ++data_set_num_;
+      //test
+      //astar_path_vec_.push_back(neighbor_center_point);
+    }
+  }
   return true;
 }
 
@@ -671,57 +675,54 @@ bool TruckServerNode::aStarSearch()
       m_truck_ptr->m_octree->searchReturnDepth(start_point, 0, start_octree_node_depth);
       double start_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-start_octree_node_depth);
       double neighbor_grid_gap = start_grid_size/2.0 + m_truck_ptr->m_octree->resolution/2.0;
-      for (int x = -1; x <= 1; ++x)
-        for (int y = -1; y <= 1; ++y)
-          for (int z = -1; z <= 1; ++z)
+      // Starts from 1, do not need first index, because this node is already visited
+      for (int i = 1; i < m_graph_connected_mode; ++i){
+        point3d neighbor_center_point;
+        Vector3d index = m_seach_graph_connected_map[i];
+        if (getGridCenter((start_point + point3d(neighbor_grid_gap*index[0],
+                                                 neighbor_grid_gap*index[1],
+                                                 neighbor_grid_gap*index[2])),
+                          neighbor_center_point, -1)){
+          if (neighbor_center_point.z() < 0)
+            continue;
+          /* If this neighbor is end_point, then stop */
+          else if (neighbor_center_point == end_point){
+            ROS_INFO("Reach the goal point.");
+            aStarDataType end_point_node;
+            end_point_node.id = data_set_num_;
+            end_point_node.prev_id = start_astar_node.id;
+            end_point_node.pos = neighbor_center_point;
+            end_point_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
+            end_point_node.h_val = 0;
+            end_point_node.f_val = end_point_node.g_val;
+            data_set_vec_.push_back(end_point_node);
+            ++data_set_num_;
+            reconstructPath(end_point_node.id);
+            return true;
+          }
+          aStarDataType new_astar_node;
+          new_astar_node.prev_id = start_astar_node.id;
+          new_astar_node.pos = neighbor_center_point;
+          new_astar_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
+          // Euclidean distance
+          //new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
+          // Manhattan distance
+          new_astar_node.h_val = m_ara_star_rate *
+            (fabs(neighbor_center_point.x()-m_land_point.x())
+             + fabs(neighbor_center_point.y()-m_land_point.y())
+             + fabs(neighbor_center_point.z()-m_land_point.z()));
+          new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
+          if (nodeInCloseSet(new_astar_node))
+            continue;
+          if (!nodeInOpenSet(new_astar_node))
             {
-              if (x == 0 && y == 0 && z == 0)
-                continue;
-              point3d neighbor_center_point;
-              if (getGridCenter((start_point + point3d(neighbor_grid_gap*x,
-                                                       neighbor_grid_gap*y,
-                                                       neighbor_grid_gap*z)),
-                                neighbor_center_point, -1))
-                {
-                  if (neighbor_center_point.z() < 0)
-                    continue;
-                  else if (neighbor_center_point == end_point){
-                    ROS_INFO("Reach the goal point.");
-                    aStarDataType end_point_node;
-                    end_point_node.id = data_set_num_;
-                    end_point_node.prev_id = start_astar_node.id;
-                    end_point_node.pos = neighbor_center_point;
-                    end_point_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
-                    end_point_node.h_val = 0;
-                    end_point_node.f_val = end_point_node.g_val;
-                    data_set_vec_.push_back(end_point_node);
-                    ++data_set_num_;
-                    reconstructPath(end_point_node.id);
-                    return true;
-                  }
-                  aStarDataType new_astar_node;
-                  new_astar_node.prev_id = start_astar_node.id;
-                  new_astar_node.pos = neighbor_center_point;
-                  new_astar_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
-                  // Euclidean distance
-                  //new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
-                  // Manhattan distance
-                  new_astar_node.h_val = m_ara_star_rate *
-                    (fabs(neighbor_center_point.x()-m_land_point.x())
-                     + fabs(neighbor_center_point.y()-m_land_point.y())
-                     + fabs(neighbor_center_point.z()-m_land_point.z()));
-                  new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
-                  if (nodeInCloseSet(new_astar_node))
-                    continue;
-                  if (!nodeInOpenSet(new_astar_node))
-                    {
-                      new_astar_node.id = data_set_num_;
-                      open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
-                      data_set_vec_.push_back(new_astar_node);
-                      ++data_set_num_;
-                    }
-                }
+              new_astar_node.id = data_set_num_;
+              open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
+              data_set_vec_.push_back(new_astar_node);
+              ++data_set_num_;
             }
+        }
+      }
     }
   ROS_INFO("A Star Search failed!!");
   return false;
@@ -819,4 +820,44 @@ void TruckServerNode::carInnerOdomCallback(const nav_msgs::OdometryConstPtr& msg
 void TruckServerNode::carOutterOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
   m_car_outter_odom = *msg;
+}
+void TruckServerNode::aStarSearchGraphInit()
+{
+  m_seach_graph_connected_map.push_back(Vector3d(0, 0, 0));
+  for (int i = 0; i < 3; ++i){
+    Vector3d vec1 = Vector3d::Zero(3);
+    vec1[i] = 1;
+    m_seach_graph_connected_map.push_back(vec1);
+    Vector3d vec2 = Vector3d::Zero(3);
+    vec2[i] = -1;
+    m_seach_graph_connected_map.push_back(vec2);
+  }
+  for (int i = 0; i < 3; ++i){
+    Vector3d vec1 = Vector3d::Zero(3);
+    vec1[i] = 1;
+    for (int j = 0; j < 3; ++j){
+      if (i != j){
+        vec1[j] = 1;
+        m_seach_graph_connected_map.push_back(vec1);
+        vec1[j] = -1;
+        m_seach_graph_connected_map.push_back(vec1);
+      }
+    }
+    Vector3d vec2 = Vector3d::Zero(3);
+    vec2[i] = -1;
+    for (int j = 0; j < 3; ++j){
+      if (i != j){
+        vec2[j] = 1;
+        m_seach_graph_connected_map.push_back(vec2);
+        vec2[j] = -1;
+        m_seach_graph_connected_map.push_back(vec2);
+      }
+    }
+  }
+  for (int i = 0; i < 2; ++i)
+    for (int j = 0; j < 2; ++j)
+      for (int k = 0; k < 2; ++k){
+        m_seach_graph_connected_map.push_back(Vector3d(2*i-1, 2*j-1, 2*k-1));
+      }
+
 }
