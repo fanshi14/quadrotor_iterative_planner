@@ -25,6 +25,7 @@ struct aStarDataType
   double g_val;
   double h_val;
   double f_val;
+  int ang_id;
   int id;
   int prev_id;
 };
@@ -617,24 +618,33 @@ bool TruckServerNode::aStarSearchInit()
                       neighbor_center_point, -1)){
       if (neighbor_center_point.z() < 0)
         continue;
-      aStarDataType new_astar_node;
-      new_astar_node.prev_id = -1;
-      new_astar_node.id = data_set_num_;
-      new_astar_node.pos = neighbor_center_point;
-      new_astar_node.g_val = m_init_point.distance(neighbor_center_point);
-      // Euclidean distance
-      //new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
-      // Manhattan distance
-      new_astar_node.h_val = m_ara_star_rate *
-        (fabs(neighbor_center_point.x()-m_land_point.x())
-         + fabs(neighbor_center_point.y()-m_land_point.y())
-         + fabs(neighbor_center_point.z()-m_land_point.z()));
-      new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
-      open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
-      data_set_vec_.push_back(new_astar_node);
-      ++data_set_num_;
-      //test
-      //astar_path_vec_.push_back(neighbor_center_point);
+      for (int k = 0; k < 6;++k){
+        aStarDataType new_astar_node;
+        new_astar_node.prev_id = -1;
+        new_astar_node.id = data_set_num_;
+        /* k is 0xabc, means x axis is a (0:up, 1:down), y axis is b, z axis is c. */
+        new_astar_node.ang_id = k;
+        new_astar_node.pos = neighbor_center_point;
+        new_astar_node.g_val = m_init_point.distance(neighbor_center_point);
+        double ang_cost = 0;
+        /* if uav goes up in z axis */
+        if (k && 0x1 == 0)
+          ang_cost = new_astar_node.g_val;
+        new_astar_node.g_val += ang_cost;
+        // Euclidean distance
+        new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
+        // Manhattan distance
+        // new_astar_node.h_val = m_ara_star_rate *
+        //   (fabs(neighbor_center_point.x()-m_land_point.x())
+        //    + fabs(neighbor_center_point.y()-m_land_point.y())
+        //    + fabs(neighbor_center_point.z()-m_land_point.z()));
+        new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
+        open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
+        data_set_vec_.push_back(new_astar_node);
+        ++data_set_num_;
+        //test
+        //astar_path_vec_.push_back(neighbor_center_point);
+      }
     }
   }
   return true;
@@ -688,39 +698,58 @@ bool TruckServerNode::aStarSearch()
           /* If this neighbor is end_point, then stop */
           else if (neighbor_center_point == end_point){
             ROS_INFO("Reach the goal point.");
-            aStarDataType end_point_node;
-            end_point_node.id = data_set_num_;
-            end_point_node.prev_id = start_astar_node.id;
-            end_point_node.pos = neighbor_center_point;
-            end_point_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
-            end_point_node.h_val = 0;
-            end_point_node.f_val = end_point_node.g_val;
-            data_set_vec_.push_back(end_point_node);
-            ++data_set_num_;
-            reconstructPath(end_point_node.id);
+            int end_grid_depth;
+            m_truck_ptr->m_octree->searchReturnDepth(end_point, 0, end_grid_depth);
+            double end_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-end_grid_depth);
+            /* if end grid is too large, skip it */
+            if (end_grid_size > 2.0){
+              reconstructPath(start_astar_node.id);
+            }
+            else{
+              aStarDataType end_point_node;
+              end_point_node.id = data_set_num_;
+              end_point_node.prev_id = start_astar_node.id;
+              end_point_node.pos = neighbor_center_point;
+              end_point_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
+              end_point_node.h_val = 0;
+              end_point_node.f_val = end_point_node.g_val;
+              data_set_vec_.push_back(end_point_node);
+              ++data_set_num_;
+              reconstructPath(end_point_node.id);
+            }
             return true;
           }
-          aStarDataType new_astar_node;
-          new_astar_node.prev_id = start_astar_node.id;
-          new_astar_node.pos = neighbor_center_point;
-          new_astar_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
-          // Euclidean distance
-          //new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
-          // Manhattan distance
-          new_astar_node.h_val = m_ara_star_rate *
-            (fabs(neighbor_center_point.x()-m_land_point.x())
-             + fabs(neighbor_center_point.y()-m_land_point.y())
-             + fabs(neighbor_center_point.z()-m_land_point.z()));
-          new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
-          if (nodeInCloseSet(new_astar_node))
-            continue;
-          if (!nodeInOpenSet(new_astar_node))
-            {
-              new_astar_node.id = data_set_num_;
-              open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
-              data_set_vec_.push_back(new_astar_node);
-              ++data_set_num_;
-            }
+          for (int k = 0; k < 6; ++k){
+            aStarDataType new_astar_node;
+            new_astar_node.prev_id = start_astar_node.id;
+            new_astar_node.ang_id = k;
+            new_astar_node.pos = neighbor_center_point;
+            new_astar_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
+            double ang_cost = 0;
+            /* if uav goes up in z axis */
+            if (k && 0x1 == 0)
+              ang_cost = new_astar_node.g_val;
+            else if (k != start_astar_node.ang_id)
+              ang_cost = neighbor_grid_gap * 0.707;
+            new_astar_node.g_val += ang_cost;
+            // Euclidean distance
+            new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
+            // Manhattan distance
+            // new_astar_node.h_val = m_ara_star_rate *
+            //   (fabs(neighbor_center_point.x()-m_land_point.x())
+            //    + fabs(neighbor_center_point.y()-m_land_point.y())
+            //    + fabs(neighbor_center_point.z()-m_land_point.z()));
+            new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
+            if (nodeInCloseSet(new_astar_node))
+              continue;
+            if (!nodeInOpenSet(new_astar_node))
+              {
+                new_astar_node.id = data_set_num_;
+                open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
+                data_set_vec_.push_back(new_astar_node);
+                ++data_set_num_;
+              }
+          }
         }
       }
     }

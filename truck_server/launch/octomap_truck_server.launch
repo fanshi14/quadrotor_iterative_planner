@@ -13,7 +13,7 @@
     <param name="has_car_outter" value="$(arg has_car_outter)" />
     <param name="ARA_rate" value="2.0" />
     <!-- 7 is planar connected, 19 is including line connected, 27 is including verticle connected -->
-    <param name="graph_connected_mode" value="27" />
+    <param name="graph_connected_mode" value="7" />
 
     <!-- track or circle -->
     <param name="route_name" value="$(arg route)" />
