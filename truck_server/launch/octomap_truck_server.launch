@@ -4,6 +4,7 @@
   <arg name="radius" default="30.0"/>
   <arg name="has_car_outter" default="true"/>
   <arg name="has_car_inner" default="true"/>
+  <arg name="spline_degree" default="2"/>
 
   <node pkg="truck_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
     <param name="resolution" value="0.2" />
@@ -36,7 +37,9 @@
   </node>
 
   <!-- generate global bspline path message -->
-  <node pkg="bspline_ros" type="tinyspline_ros_node" name="bspline_ros" output="screen" />
+  <node pkg="bspline_ros" type="tinyspline_ros_node" name="bspline_ros" output="screen">
+    <param name="spline_degree" value="$(arg spline_degree)" />
+  </node>
 
   <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="truck_traj" output="screen">
     <param name="vehicle_traj_param_pub_topic_name" value="/truck_traj_param" />
