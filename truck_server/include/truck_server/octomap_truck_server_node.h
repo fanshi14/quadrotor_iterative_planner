@@ -99,7 +99,6 @@ public:
   void pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void laneMarkerCallback(const std_msgs::Empty msg);
   void astarPathQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
-  void carsPosesCallback(const geometry_msgs::PoseArrayConstPtr& msg);
   void truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg);
   void carInnerTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg);
   void carOutterTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg);
@@ -157,7 +156,6 @@ void TruckServerNode::onInit()
   sub_lane_marker_flag_ = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
   sub_point_depth_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_depth", 1, &TruckServerNode::pointDepthQueryCallback, this);
   sub_astar_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_astar_path", 1, &TruckServerNode::astarPathQueryCallback, this);
-  sub_cars_poses_ = nh_.subscribe<geometry_msgs::PoseArray>("/cars_poses", 1, &TruckServerNode::carsPosesCallback, this);
   sub_truck_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/truck_traj_param", 1, &TruckServerNode::truckTrajParamCallback, this);
   sub_car_inner_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/car_inner_traj_param", 1, &TruckServerNode::carInnerTrajParamCallback, this);
   sub_car_outter_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/car_outter_traj_param", 1, &TruckServerNode::carOutterTrajParamCallback, this);
@@ -201,32 +199,6 @@ void TruckServerNode::laneMarkerCallback(const std_msgs::Empty msg)
   m_truck_ptr->laneMarkerVisualization();
 }
 
-
-void TruckServerNode::carsPosesCallback(const geometry_msgs::PoseArrayConstPtr& msg)
-{
-  /* Visualize separate vehicles current position in octomap, do not visualize its future position with connected octomap. */
-  if (m_vehicle_octomap_visualize_mode == 0){
-    ++m_octomap_update_feq_cnt;
-    if (m_octomap_update_feq_cnt >= m_octomap_update_feq){
-      m_octomap_update_feq_cnt = 0;
-      m_truck_ptr->m_octree->clear();
-
-      // x,y,z,r,p,y
-      // todo: currently directly assign ang value to orientation.w
-      m_truck_ptr->WriteVehicleOctree(0, Pose6D(msg->poses[0].position.x+0.8, msg->poses[0].position.y, 0.0f, 0.0, 0.0, msg->poses[0].orientation.w));
-      if (msg->poses.size() > 1){
-        m_truck_ptr->WriteVehicleOctree(1, Pose6D(msg->poses[1].position.x, msg->poses[1].position.y, 0.0f, 0.0, 0.0, msg->poses[1].orientation.w));
-        m_truck_ptr->WriteVehicleOctree(2, Pose6D(msg->poses[2].position.x, msg->poses[2].position.y, 0.0f, 0.0, 0.0, msg->poses[2].orientation.w));
-        // m_truck_ptr->WriteUavSafeBorderOctree(0, Pose6D(0.0f, 0.0f, 0.0f, 0.0, 0.0, 0.0));
-        // m_truck_ptr->WriteUavSafeBorderOctree(1, Pose6D(0.0f, 3.5f, 0.0f, 0.0, 0.0, 0.0));
-        // m_truck_ptr->WriteUavSafeBorderOctree(2, Pose6D(0.0f, -3.5f, 0.0f, 0.0, 0.0, 0.0));
-      }
-      /* Bridge obstacle */
-      //m_truck_ptr->WriteObstacleOctree(0, Pose6D(-8.5f, 0.0f, 0.0f, 0.0, 0.0, rot_ang));
-      m_truck_ptr->publishTruckAll(ros::Time().now());
-    }
-  }
-}
 
 void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
 {
