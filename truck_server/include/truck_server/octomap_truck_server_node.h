@@ -53,7 +53,7 @@ public:
 
   ros::Publisher pub_point_octocube_;
   ros::Publisher pub_reconstructed_path_markers_;
-  ros::Publisher pub_path_grid_points_;
+  ros::Publisher pub_control_points_;
 
   std::vector<aStarDataType> open_set_vec_, close_set_vec_, data_set_vec_;
   int data_set_num_;
@@ -96,7 +96,18 @@ public:
   VehicleTrajectoryBase m_car_outter_traj_base;
 
   TruckOctomapServer* m_truck_ptr;
+
+  /* iterative searching */
   std::vector<TruckOctomapServer*> m_object_seg_ptr_vec;
+  int m_n_segments;
+  double m_landing_time;
+  double m_target_height;
+  double m_default_landing_vel;
+  double m_segment_period_time;
+  std::vector<Vector3d> m_control_point_vec;
+  double m_uav_default_upbound_vel;
+
+  nav_msgs::Odometry m_uav_odom;
 
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
@@ -114,7 +125,10 @@ public:
   void aStarSearchGraphInit();
   // return true if the grid is free
   bool isInsideBoarder(point3d query_point);
+  bool isInsideBoarder(Vector3d query_point);
   bool getGridCenter(point3d query_point, point3d& center_point, int depth);
+  bool getGridCenter(Vector3d query_point, Vector3d& center_point, int depth);
+  bool getGridCenter(TruckOctomapServer* obstacle_ptr, Vector3d query_point, Vector3d& center_point, int depth);
   bool aStarSearchInit();
   bool aStarSearch();
   std::vector<aStarDataType>::iterator getPosItearator(double f_val, char ch);
@@ -122,9 +136,19 @@ public:
   bool nodeInOpenSet(aStarDataType& node);
   void reconstructPath(int end_id);
   void reconstructedPathDisplay(int mode); // mode: 1, add display; -1, delete display
-  inline void point3dConvertToPoint32(point3d point3, geometry_msgs::Point32& point32);
+  inline void vector3dConvertToPoint32(Vector3d point3, geometry_msgs::Point32& point32);
+  inline void vector3dConvertToPoint(Vector3d point3, geometry_msgs::Point& point32);
+
   // test
   void runAstarTest();
+  void uavRandomCheatOdom();
+
+  // iterative search
+  void runIterativeSearching();
+  void initIterativeSearching();
+  void onIterativeSearching();
+  void updateObstacleOctomap(TruckOctomapServer* obstacle_ptr, double t0);
+  void controlPolygonDisplay(int mode);
 };
 
 void TruckServerNode::onInit()
@@ -143,6 +167,8 @@ void TruckServerNode::onInit()
   private_nh.param("graph_connected_mode", m_graph_connected_mode, 27);
   private_nh.param("vehicles_visualize_period_time", m_vehicles_visualize_period_time, 0.5);
   private_nh.param("global_planning_period_time", m_global_planning_period_time, 1.0);
+  private_nh.param("target_height", m_target_height, 0.8);
+  private_nh.param("uav_default_upbound_vel", m_uav_default_upbound_vel, 5.0);
 
 
   /* 0 is only visualize vehicles current position, 1 is visualize their future position with connected octomap. */
@@ -170,7 +196,7 @@ void TruckServerNode::onInit()
   /* Publisher */
   pub_point_octocube_ = nh_.advertise<visualization_msgs::Marker>("octo_cube_marker", 1);
   pub_reconstructed_path_markers_ = nh_.advertise<visualization_msgs::MarkerArray>("reconstructed_path_markers", 1);
-  pub_path_grid_points_  = nh_.advertise<geometry_msgs::PolygonStamped>("path_gird_points", 1);
+  pub_control_points_  = nh_.advertise<geometry_msgs::PolygonStamped>("path_gird_points", 1);
 
   std::cout << "onInit finished.\n";
   ROS_INFO("onInit");
@@ -180,6 +206,151 @@ void TruckServerNode::onInit()
 
   // todo: get from launch
   spline_res = 0.2f;
+}
+
+void TruckServerNode::initIterativeSearching()
+{
+  /* Clear previous vector data, marker, octree data */
+  if (!m_control_point_vec.empty()){
+    controlPolygonDisplay(0);
+    m_control_point_vec.clear();
+  }
+  for (int i = 0; i < m_object_seg_ptr_vec.size(); ++i)
+    m_object_seg_ptr_vec[i]->m_octree->clear();
+  m_object_seg_ptr_vec.clear();
+
+  /* Initialize segment estimated landing time, which could be dynamically adjusted when meeting obstacles */
+  double landing_time_z = (m_uav_odom.pose.pose.position.z - m_target_height) / 1.0;
+  // if current z speed is nearly 0, then we assume there is an acceleration to 1 m/s taking 1 second
+  if (m_uav_odom.twist.twist.linear.z < 0.1)
+    landing_time_z += 1.0;
+  double truck_vel = sqrt(pow(m_truck_odom.twist.twist.linear.x, 2) +pow(m_truck_odom.twist.twist.linear.y, 2));
+  double landing_time_xy = sqrt(pow(m_uav_odom.pose.pose.position.x-m_truck_odom.pose.pose.position.x, 2) + pow(m_uav_odom.pose.pose.position.y-m_truck_odom.pose.pose.position.y, 2)) / (m_uav_default_upbound_vel - truck_vel);
+  // if result is 5.1 s, we will use 6.0s as the landing time
+  if (landing_time_z > landing_time_xy)
+    m_landing_time = (int)(landing_time_z + 0.99);
+  else
+    m_landing_time = (int)(landing_time_xy + 0.99);
+
+  /* Initialize segment default period time, which is 1.0s */
+  m_segment_period_time = 1.0;
+
+  Vector3d control_pt_0(m_uav_odom.pose.pose.position.x, m_uav_odom.pose.pose.position.y, m_uav_odom.pose.pose.position.z);
+  m_control_point_vec.push_back(control_pt_0);
+  // Set second control point: P1 = P0 + v * Tp / 2
+  while(1){
+    TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
+    updateObstacleOctomap(obstacle_ptr, 0);
+    Vector3d control_pt_1 = control_pt_0 +
+      Vector3d(m_uav_odom.twist.twist.linear.x*m_segment_period_time/2.0,
+               m_uav_odom.twist.twist.linear.y*m_segment_period_time/2.0,
+               m_uav_odom.twist.twist.linear.z*m_segment_period_time/2.0);
+    Vector3d temp_3d;
+    if (getGridCenter(obstacle_ptr, control_pt_1, temp_3d, -1)){
+      m_object_seg_ptr_vec.push_back(obstacle_ptr);
+      m_control_point_vec.push_back(control_pt_1);
+      /* if we have 2 segments on z axis, we have 3 segments in total (because of first and last point and its neighbor control points generating based on velocity constraits) */
+      m_landing_time += m_segment_period_time;
+      m_n_segments = int(m_landing_time / m_segment_period_time);
+      break;
+    }
+    else{
+      ROS_WARN("Control points 1 could not use!! Decrease initial gap to its 1/2.");
+      m_segment_period_time /= 2.0;
+      obstacle_ptr->m_octree->clear();
+    }
+    // todo: check land point's forhead control point to decide segment_period_time
+  }
+}
+
+void TruckServerNode::onIterativeSearching()
+{
+
+  /* Simple generate control points, ignoring obstacles avoidance */
+  Vector3d target_init_pt(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, m_target_height);
+  for (int i = 1; i <= m_n_segments-1; ++i){
+    Vector3d cur_control_pt = (m_control_point_vec[0] - target_init_pt) / (m_n_segments-1) * (m_n_segments-1-i) + m_truck_traj_base.nOrderVehicleTrajectory(0, i*m_segment_period_time);
+    m_control_point_vec.push_back(cur_control_pt);
+  }
+
+  /* Set second control point: Pn-1 = Pn - v * Tp / 2 */
+  /* Simple add last 2 control points without collision checking */
+  // todo: check last 2 control points
+  while(1){
+    TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
+    updateObstacleOctomap(obstacle_ptr, m_landing_time-m_segment_period_time);
+    Vector3d control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time);
+    Vector3d control_pt_n_1 = control_pt_n -
+      m_truck_traj_base.nOrderVehicleTrajectory(1, m_landing_time) * m_segment_period_time/2.0;
+
+    Vector3d temp_3d;
+    /* Check control points whether is safe */
+    // todo: stretegy when it happens
+    if (getGridCenter(obstacle_ptr, control_pt_n, temp_3d, -1)){
+      ROS_ERROR("Landing point is in collision!!!");
+    }
+    /* Check landing point's neighbor control point being safe */
+    // todo: strategy when this point is in collision
+    if (!getGridCenter(obstacle_ptr, control_pt_n_1, temp_3d, -1)){
+      ROS_WARN("Control points n-1 could not use!! TODO work.");
+    }
+    m_control_point_vec.push_back(control_pt_n_1);
+    m_control_point_vec.push_back(control_pt_n);
+    break;
+  }
+
+  /* publish control points */
+  controlPolygonDisplay(1);
+
+  for (int i = 0; i < m_control_point_vec.size(); ++i){
+    std::cout << "[Index] " << i << ": " << m_control_point_vec[i].x() << ", "
+              << m_control_point_vec[i].y() << ", " << m_control_point_vec[i].z() << "\n";
+  }
+}
+
+void TruckServerNode::runIterativeSearching()
+{
+  // test
+  // uav odom cheat mode
+  uavRandomCheatOdom();
+
+  initIterativeSearching();
+  onIterativeSearching();
+}
+
+void TruckServerNode::uavRandomCheatOdom()
+{
+  m_uav_odom = m_truck_odom;
+  // position: truck behind 4.0m, height is 5m
+  m_uav_odom.pose.pose.position.z = 4;
+  m_uav_odom.pose.pose.position.x += 1.0 + (-3.0) * cos(m_uav_odom.pose.pose.orientation.w);
+  m_uav_odom.pose.pose.position.y += 1.0 + (-3.0) * sin(m_uav_odom.pose.pose.orientation.w);
+  // velocity: 0, 0, 0
+  m_uav_odom.twist.twist.linear.x = 2.0;
+  m_uav_odom.twist.twist.linear.y = 2.0;
+  m_uav_odom.twist.twist.linear.z = 0.0;
+}
+
+void TruckServerNode::updateObstacleOctomap(TruckOctomapServer* obstacle_ptr, double t0)
+{
+  // Add inner car
+  if (m_has_car_inner){
+    Vector3d car_inner_pos = m_car_inner_traj_base.nOrderVehicleTrajectory(0, t0);
+    Vector3d car_inner_vel = m_car_inner_traj_base.nOrderVehicleTrajectory(1, t0);
+    obstacle_ptr->WriteVehicleOctree(m_car_inner_type, Pose6D(car_inner_pos.x(), car_inner_pos.y(), 0.0f, 0.0, 0.0, atan2(car_inner_vel.y(), car_inner_vel.x())));
+    car_inner_pos = m_car_inner_traj_base.nOrderVehicleTrajectory(0, t0 + m_segment_period_time);
+    car_inner_vel = m_car_inner_traj_base.nOrderVehicleTrajectory(1, t0 + m_segment_period_time);
+    obstacle_ptr->WriteVehicleOctree(m_car_inner_type, Pose6D(car_inner_pos.x(), car_inner_pos.y(), 0.0f, 0.0, 0.0, atan2(car_inner_vel.y(), car_inner_vel.x())));
+  }
+    // Add outter car
+  if (m_has_car_outter){
+    Vector3d car_outter_pos = m_car_outter_traj_base.nOrderVehicleTrajectory(0, t0);
+    Vector3d car_outter_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, t0);
+    obstacle_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(car_outter_pos.x(), car_outter_pos.y(), 0.0f, 0.0, 0.0, atan2(car_outter_vel.y(), car_outter_vel.x())));
+    car_outter_pos = m_car_outter_traj_base.nOrderVehicleTrajectory(0, t0 + m_segment_period_time);
+    car_outter_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, t0 + m_segment_period_time);
+    obstacle_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(car_outter_pos.x(), car_outter_pos.y(), 0.0f, 0.0, 0.0, atan2(car_outter_vel.y(), car_outter_vel.x())));
+  }
 }
 
 void TruckServerNode::pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
@@ -255,6 +426,8 @@ void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayCo
         data1.push_back(m_car_outter_traj_msg.data[i]);
       m_car_outter_traj_base.onInit(traj_order1, data1);
     }
+    /* run Iterative Searching */
+    runIterativeSearching();
   }
 }
 
@@ -340,121 +513,103 @@ void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstP
 
 }
 
-void TruckServerNode::reconstructedPathDisplay(int mode){
-  int points_num = astar_path_vec_.size();
-  std::cout << "[Display] points number: " << points_num << "\n";
+void TruckServerNode::controlPolygonDisplay(int mode){
+  int control_points_num = m_control_point_vec.size();
+  std::cout << "[Display] Control points number: " << control_points_num << "\n";
   int id_cnt = 0;
   visualization_msgs::MarkerArray path_markers;
-  visualization_msgs::Marker center_point_marker, octo_cube_marker, arrow_marker;
-  octo_cube_marker.ns = center_point_marker.ns = arrow_marker.ns = "pathcubes";
-  octo_cube_marker.header.frame_id = center_point_marker.header.frame_id = arrow_marker.header.frame_id = std::string("/world");
-  octo_cube_marker.header.stamp = center_point_marker.header.stamp = arrow_marker.header.stamp = ros::Time().now();
+  visualization_msgs::Marker control_point_marker, line_list_marker;
+  control_point_marker.ns = line_list_marker.ns = "control_polygon";
+  control_point_marker.header.frame_id = line_list_marker.header.frame_id = std::string("/world");
+  control_point_marker.header.stamp = line_list_marker.header.stamp = ros::Time().now();
   if (mode == 1)
-    octo_cube_marker.action = center_point_marker.action = arrow_marker.action = visualization_msgs::Marker::ADD;
+    control_point_marker.action = line_list_marker.action = visualization_msgs::Marker::ADD;
   else
-    octo_cube_marker.action = center_point_marker.action = arrow_marker.action = visualization_msgs::Marker::DELETE;
-  octo_cube_marker.type = visualization_msgs::Marker::CUBE;
-  center_point_marker.type = visualization_msgs::Marker::SPHERE;
-  arrow_marker.type = visualization_msgs::Marker::ARROW;
+    control_point_marker.action = line_list_marker.action = visualization_msgs::Marker::DELETE;
 
-  geometry_msgs::PolygonStamped path_grid_points;
-  path_grid_points.header = octo_cube_marker.header;
-  geometry_msgs::Point32 grid_point, time_point;
-  time_point.x = 0.0f; time_point.y = 0.0f; time_point.z = 0.0f;
-  path_grid_points.polygon.points.push_back(time_point);
-  point3dConvertToPoint32(m_init_point, grid_point);
-  path_grid_points.polygon.points.push_back(grid_point);
+  control_point_marker.type = visualization_msgs::Marker::SPHERE;
+  line_list_marker.type = visualization_msgs::Marker::LINE_LIST;
 
-  for (int i = points_num-1; i >=0 ; --i){
-    int cur_depth;
-    m_truck_ptr->m_octree->searchReturnDepth(astar_path_vec_[i], 0, cur_depth);
-    double cube_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-cur_depth);
-    // if (result == NULL)
-    //   std::cout << "Unknown/free region.\n";
-    // else
-    //   std::cout << "Prob is  " << result->getOccupancy() << "\n";
+  geometry_msgs::PolygonStamped control_polygon_points;
+  control_polygon_points.header = control_point_marker.header;
 
-    if (i >= 1){
-      arrow_marker.id = id_cnt;
-      ++id_cnt;
-      geometry_msgs::Point s_pt, e_pt;
-      s_pt.x = astar_path_vec_[i-1].x();
-      s_pt.y = astar_path_vec_[i-1].y();
-      s_pt.z = astar_path_vec_[i-1].z();
-      e_pt.x = astar_path_vec_[i].x();
-      e_pt.y = astar_path_vec_[i].y();
-      e_pt.z = astar_path_vec_[i].z();
-      arrow_marker.points.clear();
-      arrow_marker.points.push_back(s_pt);
-      arrow_marker.points.push_back(e_pt);
-      //scale.x is the shaft diameter, and scale.y is the head diameter. scale.z is the head length.
-      arrow_marker.scale.x = 0.05;
-      arrow_marker.scale.y = 0.2;
-      arrow_marker.scale.z = 0.07;
-      arrow_marker.color.a = 1;
-      arrow_marker.color.r = 0.0f;
-      arrow_marker.color.g = 0.0f;
-      arrow_marker.color.b = 1.0f;
-      path_markers.markers.push_back(arrow_marker);
+  for (int i = 0; i < control_points_num; ++i){
+    geometry_msgs::Point32 control_point, time_point;
+    time_point.x = time_point.y = time_point.z = m_segment_period_time * i;
+    control_polygon_points.polygon.points.push_back(time_point);
+    vector3dConvertToPoint32(m_control_point_vec[i], control_point);
+    control_polygon_points.polygon.points.push_back(control_point);
+  }
+  if (mode == 1)
+    pub_control_points_.publish(control_polygon_points);
 
-      time_point.x += spline_res * int(astar_path_vec_[i].distance(astar_path_vec_[i-1]) / spline_res);
-      path_grid_points.polygon.points.push_back(time_point);
-      point3dConvertToPoint32(astar_path_vec_[i-1], grid_point);
-      path_grid_points.polygon.points.push_back(grid_point);
-    }
+  line_list_marker.id = id_cnt;
+  ++id_cnt;
+  line_list_marker.scale.x = 0.1;
+  line_list_marker.color.r = 0.0;
+  line_list_marker.color.g = 1.0;
+  line_list_marker.color.b = 0.0;
+  line_list_marker.color.a = 1.0;
+  geometry_msgs::Point pt;
+  vector3dConvertToPoint(m_control_point_vec[0], pt);
+  line_list_marker.points.push_back(pt);
+  vector3dConvertToPoint(m_control_point_vec[1], pt);
+  line_list_marker.points.push_back(pt);
+  for (int i = 2; i < control_points_num; ++i){
+    vector3dConvertToPoint(m_control_point_vec[i-2], pt);
+    line_list_marker.points.push_back(pt);
+    vector3dConvertToPoint(m_control_point_vec[i], pt);
+    line_list_marker.points.push_back(pt);
+    vector3dConvertToPoint(m_control_point_vec[i-1], pt);
+    line_list_marker.points.push_back(pt);
+    vector3dConvertToPoint(m_control_point_vec[i], pt);
+    line_list_marker.points.push_back(pt);
+  }
+  path_markers.markers.push_back(line_list_marker);
 
-    center_point_marker.id = id_cnt;
+  for (int i = 0; i < control_points_num; ++i){
+    control_point_marker.id = id_cnt;
     ++id_cnt;
-    center_point_marker.pose.position.x = astar_path_vec_[i].x();
-    center_point_marker.pose.position.y = astar_path_vec_[i].y();
-    center_point_marker.pose.position.z = astar_path_vec_[i].z();
-    center_point_marker.pose.orientation.x = 0.0;
-    center_point_marker.pose.orientation.y = 0.0;
-    center_point_marker.pose.orientation.z = 0.0;
-    center_point_marker.pose.orientation.w = 1.0;
-    if (i == 0 || i == points_num-1){
-      center_point_marker.scale.x = 0.3;
-      center_point_marker.scale.y = 0.3;
-      center_point_marker.scale.z = 0.3;
-      center_point_marker.color.a = 1;
-      center_point_marker.color.r = 1.0f;
-      center_point_marker.color.g = 0.0f;
-      center_point_marker.color.b = 0.0f;
-      path_markers.markers.push_back(center_point_marker);
+    control_point_marker.pose.position.x = m_control_point_vec[i].x();
+    control_point_marker.pose.position.y = m_control_point_vec[i].y();
+    control_point_marker.pose.position.z = m_control_point_vec[i].z();
+    control_point_marker.pose.orientation.x = 0.0;
+    control_point_marker.pose.orientation.y = 0.0;
+    control_point_marker.pose.orientation.z = 0.0;
+    control_point_marker.pose.orientation.w = 1.0;
+    if (i == 0 || i == control_points_num-1){
+      control_point_marker.scale.x = 1.0;
+      control_point_marker.scale.y = 1.0;
+      control_point_marker.scale.z = 1.0;
+      control_point_marker.color.a = 1;
+      control_point_marker.color.r = 0.0f;
+      control_point_marker.color.g = 1.0f;
+      control_point_marker.color.b = 0.0f;
+      path_markers.markers.push_back(control_point_marker);
       continue;
     }
     else{
-      center_point_marker.scale.x = 0.05;
-      center_point_marker.scale.y = 0.05;
-      center_point_marker.scale.z = 0.05;
-      center_point_marker.color.a = 1;
-      center_point_marker.color.r = 1.0f;
-      center_point_marker.color.g = 0.0f;
-      center_point_marker.color.b = 0.0f;
-      path_markers.markers.push_back(center_point_marker);
+      control_point_marker.scale.x = 0.5;
+      control_point_marker.scale.y = 0.5;
+      control_point_marker.scale.z = 0.5;
+      control_point_marker.color.a = 1;
+      control_point_marker.color.r = 0.0f;
+      control_point_marker.color.g = 1.0f;
+      control_point_marker.color.b = 0.0f;
+      path_markers.markers.push_back(control_point_marker);
     }
-
-    octo_cube_marker.id = id_cnt;
-    ++id_cnt;
-    octo_cube_marker.pose.position.x = astar_path_vec_[i].x();
-    octo_cube_marker.pose.position.y = astar_path_vec_[i].y();
-    octo_cube_marker.pose.position.z = astar_path_vec_[i].z();
-    octo_cube_marker.pose.orientation.x = 0.0;
-    octo_cube_marker.pose.orientation.y = 0.0;
-    octo_cube_marker.pose.orientation.z = 0.0;
-    octo_cube_marker.pose.orientation.w = 1.0;
-    octo_cube_marker.scale.x = cube_size;
-    octo_cube_marker.scale.y = cube_size;
-    octo_cube_marker.scale.z = cube_size;
-    octo_cube_marker.color.a = 0.5;
-    octo_cube_marker.color.r = 0.0f;
-    octo_cube_marker.color.g = 1.0f;
-    octo_cube_marker.color.b = 0.0f;
-    path_markers.markers.push_back(octo_cube_marker);
   }
   pub_reconstructed_path_markers_.publish(path_markers);
-  if (mode == 1)
-    pub_path_grid_points_.publish(path_grid_points);
+}
+
+bool TruckServerNode::isInsideBoarder(Vector3d query_point)
+{
+  if (query_point.x() >= m_octomap_boarder_val || query_point.x() <= -m_octomap_boarder_val
+      || query_point.y() >= m_octomap_boarder_val || query_point.y() <= -m_octomap_boarder_val
+      ||query_point.z() >= m_octomap_boarder_val || query_point.z() <= -m_octomap_boarder_val)
+    return false;
+  else
+    return true;
 }
 
 bool TruckServerNode::isInsideBoarder(point3d query_point)
@@ -465,6 +620,66 @@ bool TruckServerNode::isInsideBoarder(point3d query_point)
     return false;
   else
     return true;
+}
+
+bool TruckServerNode::getGridCenter(TruckOctomapServer* obstacle_ptr, Vector3d query_point, Vector3d& center_point, int depth)
+{
+  bool isGridFree = true;
+
+  if (!isInsideBoarder(query_point)){
+    isGridFree = false;
+    return false;
+  }
+
+  // when not have prior knowledge of depth, assign depth as -1
+  if (depth == -1)
+    {
+      point3d query_point_p(query_point[0], query_point[1], query_point[1]);
+      OcTreeNode* result = obstacle_ptr->m_octree->searchReturnDepth(query_point_p, 0, depth);
+      if (result != NULL)
+        isGridFree = false;
+    }
+  key_type key_x = obstacle_ptr->m_octree->coordToKey(query_point.x(), depth);
+  key_type key_y = obstacle_ptr->m_octree->coordToKey(query_point.y(), depth);
+  key_type key_z = obstacle_ptr->m_octree->coordToKey(query_point.z(), depth);
+  double center_x = obstacle_ptr->m_octree->keyToCoord(key_x, depth);
+  double center_y = obstacle_ptr->m_octree->keyToCoord(key_y, depth);
+  double center_z = obstacle_ptr->m_octree->keyToCoord(key_z, depth);
+  center_point.x() = center_x;
+  center_point.y() = center_y;
+  center_point.z() = center_z;
+  return isGridFree;
+}
+
+
+bool TruckServerNode::getGridCenter(Vector3d query_point, Vector3d& center_point, int depth)
+{
+  bool isGridFree = true;
+
+  if (!isInsideBoarder(query_point)){
+    isGridFree = false;
+    return false;
+  }
+
+  // when not have prior knowledge of depth, assign depth as -1
+  if (depth == -1)
+    {
+      point3d query_point_p(query_point[0], query_point[1], query_point[1]);
+      std::cout << "query point: " << query_point_p.x() << ", " << query_point_p.y() << ", " << query_point_p.z() << "\n";
+      OcTreeNode* result = m_truck_ptr->m_octree->searchReturnDepth(query_point_p, 0, depth);
+      if (result != NULL)
+        isGridFree = false;
+    }
+  key_type key_x = m_truck_ptr->m_octree->coordToKey(query_point.x(), depth);
+  key_type key_y = m_truck_ptr->m_octree->coordToKey(query_point.y(), depth);
+  key_type key_z = m_truck_ptr->m_octree->coordToKey(query_point.z(), depth);
+  double center_x = m_truck_ptr->m_octree->keyToCoord(key_x, depth);
+  double center_y = m_truck_ptr->m_octree->keyToCoord(key_y, depth);
+  double center_z = m_truck_ptr->m_octree->keyToCoord(key_z, depth);
+  center_point.x() = center_x;
+  center_point.y() = center_y;
+  center_point.z() = center_z;
+  return isGridFree;
 }
 
 bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, int depth)
@@ -733,11 +948,18 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 // }
 
 
-inline void TruckServerNode::point3dConvertToPoint32(point3d point3, geometry_msgs::Point32& point32)
+inline void TruckServerNode::vector3dConvertToPoint32(Vector3d point3, geometry_msgs::Point32& point32)
 {
   point32.x = point3.x();
   point32.y = point3.y();
   point32.z = point3.z();
+}
+
+inline void TruckServerNode::vector3dConvertToPoint(Vector3d point3, geometry_msgs::Point& point)
+{
+  point.x = point3.x();
+  point.y = point3.y();
+  point.z = point3.z();
 }
 
 void TruckServerNode::truckOdomCallback(const nav_msgs::OdometryConstPtr& msg)

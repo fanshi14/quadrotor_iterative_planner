@@ -21,6 +21,13 @@ TruckOctomapServer::TruckOctomapServer(double resolution, int tree_depth) :
   init_param();
 }
 
+
+TruckOctomapServer::TruckOctomapServer(double resolution, int tree_depth, bool is_publish_topic) :
+  OctomapServer(resolution, tree_depth, is_publish_topic)
+{
+  //init_param();
+}
+
 TruckOctomapServer::~TruckOctomapServer() {}
 
 void TruckOctomapServer::init_param()
@@ -68,7 +75,7 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
   // truck with out roof
   else if (type == -1)
     {
-      base_size[0] = 3.6f; base_size[1] = 1.6f; base_size[2] = 0.7f;
+      base_size[0] = 3.6f; base_size[1] = 1.6f; base_size[2] = 0.8f;
       roof_size[0] = 0.0f; roof_size[1] = 0.0f; roof_size[2] = 0.0f;
       cargo_size[0] = 0.0f; cargo_size[1] = 0.0f; cargo_size[2] = 0.0f;
     }

@@ -32,8 +32,8 @@
     <param name="route_name" value="$(arg route)" />
     <param name="route_radius" value="$(arg radius)" />
     <param name="truck_vel" value="4.17" />
-    <param name="car_outter_vel" value="4.575" />
-    <param name="car_inner_vel" value="3.765" />
+    <param name="car_outter_vel" value="4.865" />
+    <param name="car_inner_vel" value="3.475" />
   </node>
 
   <!-- generate global bspline path message -->

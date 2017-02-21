@@ -21,6 +21,7 @@ using namespace octomath;
 class TruckOctomapServer: public OctomapServer {
 public:
   TruckOctomapServer(double resolution, int tree_depth);
+  TruckOctomapServer(double resolution, int tree_depth, bool is_publish_topic);
   virtual ~TruckOctomapServer();
   float m_step_value;
   ros::Publisher m_pub_lane_marker;

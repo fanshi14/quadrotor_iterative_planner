@@ -3,6 +3,7 @@
 import rospy
 from geometry_msgs.msg import PoseArray
 from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 import sys
 import math
@@ -50,6 +51,10 @@ def talker():
             cur_pose.orientation.w = truck_ang
             poses.poses.append(cur_pose)
             truck_odom.pose.pose = cur_pose
+            cur_twist = Twist()
+            cur_twist.linear.x = truck_vel * math.cos(truck_ang)
+            cur_twist.linear.y = truck_vel * math.sin(truck_ang)
+            truck_odom.twist.twist = cur_twist
             truck_odom_pub.publish(truck_odom)
             ## car small
             if has_car_inner:
@@ -60,6 +65,10 @@ def talker():
                 temp_pose.orientation.w = car_inner_ang
                 poses.poses.append(temp_pose)
                 car_inner_odom.pose.pose = temp_pose
+                temp_twist = Twist()
+                temp_twist.linear.x = car_inner_vel * math.cos(car_inner_ang)
+                temp_twist.linear.y = car_inner_vel * math.sin(car_inner_ang)
+                truck_odom.twist.twist = temp_twist
                 car_inner_odom_pub.publish(car_inner_odom)
             ## car big
             if has_car_outter:
@@ -70,6 +79,10 @@ def talker():
                 temp_pose.orientation.w = car_outter_ang
                 poses.poses.append(temp_pose)
                 car_outter_odom.pose.pose = temp_pose
+                temp_twist = Twist()
+                temp_twist.linear.x = car_outter_vel * math.cos(car_outter_ang)
+                temp_twist.linear.y = car_outter_vel * math.sin(car_outter_ang)
+                truck_odom.twist.twist = temp_twist
                 car_outter_odom_pub.publish(car_outter_odom)
 
             cars_poses_pub.publish(poses)
