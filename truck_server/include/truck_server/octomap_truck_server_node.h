@@ -82,8 +82,11 @@ public:
   nav_msgs::Odometry m_car_inner_odom;
   nav_msgs::Odometry m_car_outter_odom;
   double m_vehicle_traj_recv_time;
+  double m_global_planning_period_time;
   double m_vehicles_visualize_prev_time;
-  double m_vehicles_visualize_gap_time;
+  double m_vehicles_visualize_period_time;
+  std_msgs::Float64MultiArray m_car_inner_traj_msg;
+  std_msgs::Float64MultiArray m_car_outter_traj_msg;
 
   int m_car_inner_type;
   int m_car_outter_type;
@@ -138,7 +141,9 @@ void TruckServerNode::onInit()
   private_nh.param("octomap_update_rate", m_octomap_update_feq, 1);
   private_nh.param("ARA_rate", m_ara_star_rate, 1.0);
   private_nh.param("graph_connected_mode", m_graph_connected_mode, 27);
-  private_nh.param("vehicles_visualize_gap_time", m_vehicles_visualize_gap_time, 0.5);
+  private_nh.param("vehicles_visualize_period_time", m_vehicles_visualize_period_time, 0.5);
+  private_nh.param("global_planning_period_time", m_global_planning_period_time, 1.0);
+
 
   /* 0 is only visualize vehicles current position, 1 is visualize their future position with connected octomap. */
   private_nh.param("vehicle_octomap_visualize_mode", m_vehicle_octomap_visualize_mode, 0);
@@ -155,7 +160,6 @@ void TruckServerNode::onInit()
   sub_point_occupied_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_occupied", 10, &TruckServerNode::pointOccupiedQueryCallback, this);
   sub_lane_marker_flag_ = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
   sub_point_depth_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_depth", 1, &TruckServerNode::pointDepthQueryCallback, this);
-  sub_astar_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_astar_path", 1, &TruckServerNode::astarPathQueryCallback, this);
   sub_truck_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/truck_traj_param", 1, &TruckServerNode::truckTrajParamCallback, this);
   sub_car_inner_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/car_inner_traj_param", 1, &TruckServerNode::carInnerTrajParamCallback, this);
   sub_car_outter_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/car_outter_traj_param", 1, &TruckServerNode::carOutterTrajParamCallback, this);
@@ -224,38 +228,40 @@ void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
 
 void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
-  // double cur_time = ros::Time().now().toSec();
-  // if (m_truck_traj_recv_time < 0)
-  //   m_truck_traj_recv_time = cur_time;
-  // else if (cur_time - m_truck_traj_recv_time > 1.0){
-  //   m_truck_traj_recv_time = cur_time;
-  //   int traj_order = msg->layout.dim[0].size;
-  //   std::vector<double> data;
-  //   for (int i = 0; i < 2*traj_order+1; ++i)
-  //     data.push_back(msg->data[i]);
-  //   m_truck_traj_base.onInit(traj_order, data);
-  // }
+  double cur_time = ros::Time().now().toSec();
+  if (cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time){
+    m_vehicle_traj_recv_time = cur_time;
+
+    int traj_order = msg->layout.dim[0].size;
+    std::vector<double> data;
+    for (int i = 0; i < 2*traj_order+1; ++i)
+      data.push_back(msg->data[i]);
+    m_truck_traj_base.onInit(traj_order, data);
+
+    // Load car inner's trajectory paramaters
+    if (m_has_car_inner){
+      int traj_order1 = m_car_inner_traj_msg.layout.dim[0].size;
+      std::vector<double> data1;
+      for (int i = 0; i < 2*traj_order1+1; ++i)
+        data1.push_back(m_car_inner_traj_msg.data[i]);
+      m_car_inner_traj_base.onInit(traj_order1, data1);
+    }
+
+    // Load car outter's trajectory paramaters
+    if (m_has_car_outter){
+      int traj_order1 = m_car_outter_traj_msg.layout.dim[0].size;
+      std::vector<double> data1;
+      for (int i = 0; i < 2*traj_order1+1; ++i)
+        data1.push_back(m_car_outter_traj_msg.data[i]);
+      m_car_outter_traj_base.onInit(traj_order1, data1);
+    }
+  }
 }
 
 
 void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
-  // double cur_time = ros::Time().now().toSec();
-  // if (m_car_inner_traj_recv_time < 0){
-  //   m_car_inner_traj_recv_time = cur_time;
-  //   return;
-  // }
-  // else if (cur_time - m_car_inner_traj_recv_time < 1.0)
-  //   return;
-  // m_car_inner_traj_recv_time = cur_time;
-
-  // if (m_octo_publish_all_cnt == 0)
-  //   m_truck_ptr->m_octree->clear();
-  // int traj_order = msg->layout.dim[0].size;
-  // std::vector<double> data;
-  // for (int i = 0; i < 2*traj_order+1; ++i)
-  //   data.push_back(msg->data[i]);
-  // m_car_inner_traj_base.onInit(traj_order, data);
+  m_car_inner_traj_msg = *msg;
 
   // if (m_vehicle_octomap_visualize_mode == 1){
   //   for (int i = 0; i <=5; ++i){
@@ -263,87 +269,12 @@ void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArra
   //     Vector3d vehicle_vel = m_car_inner_traj_base.nOrderVehicleTrajectory(1, i*1.0);
   //     m_truck_ptr->WriteVehicleOctree(m_car_inner_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
   //   }
-  //   ++m_octo_publish_all_cnt;
-  //   if (m_octo_publish_all_cnt >= 2){
-  //     //vehicleCurrentPosVisualization(0);
-  //     // truck without roof
-  //     vehicleCurrentPosVisualization(-1);
-  //     m_truck_ptr->publishTruckAll(ros::Time().now());
-  //     m_octo_publish_all_cnt = 0;
-  //     // test
-  //     runAstarTest();
-  //   }
-  // }
 }
 
 
 void TruckServerNode::carOutterTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
-  // double cur_time = ros::Time().now().toSec();
-  // if (m_car_outter_traj_recv_time < 0){
-  //   m_car_outter_traj_recv_time = cur_time;
-  //   return;
-  // }
-  // else if (cur_time - m_car_outter_traj_recv_time < 1.0)
-  //   return;
-  // m_car_outter_traj_recv_time = cur_time;
-
-  // if (m_octo_publish_all_cnt == 0)
-  //   m_truck_ptr->m_octree->clear();
-  // int traj_order = msg->layout.dim[0].size;
-  // std::vector<double> data;
-  // for (int i = 0; i < 2*traj_order+1; ++i)
-  //   data.push_back(msg->data[i]);
-  // m_car_outter_traj_base.onInit(traj_order, data);
-  // if (m_vehicle_octomap_visualize_mode == 1){
-  //   for (int i = 0; i <=5; ++i){
-  //     Vector3d vehicle_pos = m_car_outter_traj_base.nOrderVehicleTrajectory(0, i*1.0);
-  //     Vector3d vehicle_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, i*1.0);
-  //     m_truck_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
-  //   }
-  //   ++m_octo_publish_all_cnt;
-  //   if (m_octo_publish_all_cnt >= 2){
-  //     //vehicleCurrentPosVisualization(0);
-  //     // truck without roof
-  //     vehicleCurrentPosVisualization(-1);
-  //     m_truck_ptr->publishTruckAll(ros::Time().now());
-  //     m_octo_publish_all_cnt = 0;
-  //     // test
-  //     runAstarTest();
-  //   }
-  // }
-}
-
-
-void TruckServerNode::runAstarTest(){
-  ROS_INFO("AstarPathQuery");
-  // If alredy have diplay, delete previous display first.
-  if (astar_path_vec_.size() > 0)
-    reconstructedPathDisplay(-1);
-  double ang = -0.1 + m_truck_odom.pose.pose.orientation.w;
-  m_init_point = point3d(m_truck_ptr->m_route_radius*sin(ang), -m_truck_ptr->m_route_radius*cos(ang), 5);
-  Vector3d vehicle_pos = m_truck_traj_base.nOrderVehicleTrajectory(0, 5*1.0);
-  //m_land_point = point3d(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, m_truck_odom.pose.pose.position.z);
-  m_land_point = point3d(vehicle_pos[0], vehicle_pos[1], m_truck_odom.pose.pose.position.z);
-  if (aStarSearch()){
-    ROS_INFO("Search finished");
-    reconstructedPathDisplay(1);
-    ROS_INFO("Display finished");
-  }
-}
-
-void TruckServerNode::astarPathQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
-  ROS_INFO("AstarPathQuery");
-  // If alredy have diplay, delete previous display first.
-  if (astar_path_vec_.size() > 0)
-    reconstructedPathDisplay(-1);
-  m_init_point = point3d(msg->x, msg->y, msg->z);
-  m_land_point = point3d(0, -m_truck_ptr->m_route_radius, 0.8);
-  if (aStarSearch()){
-    ROS_INFO("Search finished");
-    reconstructedPathDisplay(1);
-    ROS_INFO("Display finished");
-  }
+  m_car_outter_traj_msg = *msg;
 }
 
 void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){
@@ -565,241 +496,241 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
   return isGridFree;
 }
 
-bool TruckServerNode::aStarSearchInit()
-{
-  data_set_num_ = 0;
-  data_set_vec_.clear();
-  open_set_vec_.clear();
-  close_set_vec_.clear();
-  astar_path_vec_.clear();
+// bool TruckServerNode::aStarSearchInit()
+// {
+//   data_set_num_ = 0;
+//   data_set_vec_.clear();
+//   open_set_vec_.clear();
+//   close_set_vec_.clear();
+//   astar_path_vec_.clear();
 
-  point3d start_point;
-  if (!getGridCenter(m_init_point, start_point, -1)){
-    ROS_ERROR("Init astar search point is not available.");
-    return false;
-  }
-  int start_node_depth;
-  m_truck_ptr->m_octree->searchReturnDepth(start_point, 0, start_node_depth);
-  double start_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-start_node_depth);
-  double neighbor_grid_gap = start_grid_size/2.0 + m_truck_ptr->m_octree->resolution/2.0;
-  for (int i = 0; i < m_graph_connected_mode; ++i){
-    point3d neighbor_center_point;
-    Vector3d index = m_seach_graph_connected_map[i];
-    if (getGridCenter((start_point + point3d(neighbor_grid_gap*index[0],
-                                             neighbor_grid_gap*index[1],
-                                             neighbor_grid_gap*index[2])),
-                      neighbor_center_point, -1)){
-      if (neighbor_center_point.z() < 0)
-        continue;
-      for (int k = 0; k < 6;++k){
-        aStarDataType new_astar_node;
-        new_astar_node.prev_id = -1;
-        new_astar_node.id = data_set_num_;
-        /* k is 0xabc, means x axis is a (0:up, 1:down), y axis is b, z axis is c. */
-        new_astar_node.ang_id = k;
-        new_astar_node.pos = neighbor_center_point;
-        new_astar_node.g_val = m_init_point.distance(neighbor_center_point);
-        double ang_cost = 0;
-        /* if uav goes up in z axis */
-        if (k && 0x1 == 0)
-          ang_cost = new_astar_node.g_val;
-        new_astar_node.g_val += ang_cost;
-        // Euclidean distance
-        new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
-        // Manhattan distance
-        // new_astar_node.h_val = m_ara_star_rate *
-        //   (fabs(neighbor_center_point.x()-m_land_point.x())
-        //    + fabs(neighbor_center_point.y()-m_land_point.y())
-        //    + fabs(neighbor_center_point.z()-m_land_point.z()));
-        new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
-        open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
-        data_set_vec_.push_back(new_astar_node);
-        ++data_set_num_;
-        //test
-        //astar_path_vec_.push_back(neighbor_center_point);
-      }
-    }
-  }
-  return true;
-}
+//   point3d start_point;
+//   if (!getGridCenter(m_init_point, start_point, -1)){
+//     ROS_ERROR("Init astar search point is not available.");
+//     return false;
+//   }
+//   int start_node_depth;
+//   m_truck_ptr->m_octree->searchReturnDepth(start_point, 0, start_node_depth);
+//   double start_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-start_node_depth);
+//   double neighbor_grid_gap = start_grid_size/2.0 + m_truck_ptr->m_octree->resolution/2.0;
+//   for (int i = 0; i < m_graph_connected_mode; ++i){
+//     point3d neighbor_center_point;
+//     Vector3d index = m_seach_graph_connected_map[i];
+//     if (getGridCenter((start_point + point3d(neighbor_grid_gap*index[0],
+//                                              neighbor_grid_gap*index[1],
+//                                              neighbor_grid_gap*index[2])),
+//                       neighbor_center_point, -1)){
+//       if (neighbor_center_point.z() < 0)
+//         continue;
+//       for (int k = 0; k < 6;++k){
+//         aStarDataType new_astar_node;
+//         new_astar_node.prev_id = -1;
+//         new_astar_node.id = data_set_num_;
+//         /* k is 0xabc, means x axis is a (0:up, 1:down), y axis is b, z axis is c. */
+//         new_astar_node.ang_id = k;
+//         new_astar_node.pos = neighbor_center_point;
+//         new_astar_node.g_val = m_init_point.distance(neighbor_center_point);
+//         double ang_cost = 0;
+//         /* if uav goes up in z axis */
+//         if (k && 0x1 == 0)
+//           ang_cost = new_astar_node.g_val;
+//         new_astar_node.g_val += ang_cost;
+//         // Euclidean distance
+//         new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
+//         // Manhattan distance
+//         // new_astar_node.h_val = m_ara_star_rate *
+//         //   (fabs(neighbor_center_point.x()-m_land_point.x())
+//         //    + fabs(neighbor_center_point.y()-m_land_point.y())
+//         //    + fabs(neighbor_center_point.z()-m_land_point.z()));
+//         new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
+//         open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
+//         data_set_vec_.push_back(new_astar_node);
+//         ++data_set_num_;
+//         //test
+//         //astar_path_vec_.push_back(neighbor_center_point);
+//       }
+//     }
+//   }
+//   return true;
+// }
 
 
-bool TruckServerNode::aStarSearch()
-{
-  if (!aStarSearchInit()){
-    ROS_INFO("A Star Search failed!!");
-    return false;
-  }
-  point3d end_point;
-  if (!getGridCenter(m_land_point, end_point, -1)){
-    ROS_ERROR("Land point is not available.");
-    ROS_INFO("A Star Search failed!!");
-    return false;
-  }
+// bool TruckServerNode::aStarSearch()
+// {
+//   if (!aStarSearchInit()){
+//     ROS_INFO("A Star Search failed!!");
+//     return false;
+//   }
+//   point3d end_point;
+//   if (!getGridCenter(m_land_point, end_point, -1)){
+//     ROS_ERROR("Land point is not available.");
+//     ROS_INFO("A Star Search failed!!");
+//     return false;
+//   }
 
-  while (!open_set_vec_.empty())
-    {
-      //std::cout << "open set size: " << open_set_vec_.size() << '\n';
-      // Pop first element in open set, and push into close set
-      aStarDataType start_astar_node = open_set_vec_[0];
-      point3d start_point = start_astar_node.pos;
-      // Judge whether reach the goal point
-      // TODO: better end conditions is needed
-      if (start_point == end_point)
-        {
-          ROS_INFO("Reach the goal point.");
-          reconstructPath(start_astar_node.id);
-          return true;
-        }
-      close_set_vec_.insert(getPosItearator(start_astar_node.f_val, 'c'), start_astar_node);
-      open_set_vec_.erase(open_set_vec_.begin());
+//   while (!open_set_vec_.empty())
+//     {
+//       //std::cout << "open set size: " << open_set_vec_.size() << '\n';
+//       // Pop first element in open set, and push into close set
+//       aStarDataType start_astar_node = open_set_vec_[0];
+//       point3d start_point = start_astar_node.pos;
+//       // Judge whether reach the goal point
+//       // TODO: better end conditions is needed
+//       if (start_point == end_point)
+//         {
+//           ROS_INFO("Reach the goal point.");
+//           reconstructPath(start_astar_node.id);
+//           return true;
+//         }
+//       close_set_vec_.insert(getPosItearator(start_astar_node.f_val, 'c'), start_astar_node);
+//       open_set_vec_.erase(open_set_vec_.begin());
 
-      int start_octree_node_depth;
-      m_truck_ptr->m_octree->searchReturnDepth(start_point, 0, start_octree_node_depth);
-      double start_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-start_octree_node_depth);
-      double neighbor_grid_gap = start_grid_size/2.0 + m_truck_ptr->m_octree->resolution/2.0;
-      // Starts from 1, do not need first index, because this node is already visited
-      for (int i = 1; i < m_graph_connected_mode; ++i){
-        point3d neighbor_center_point;
-        Vector3d index = m_seach_graph_connected_map[i];
-        if (getGridCenter((start_point + point3d(neighbor_grid_gap*index[0],
-                                                 neighbor_grid_gap*index[1],
-                                                 neighbor_grid_gap*index[2])),
-                          neighbor_center_point, -1)){
-          if (neighbor_center_point.z() < 0)
-            continue;
-          /* If this neighbor is end_point, then stop */
-          else if (neighbor_center_point == end_point){
-            ROS_INFO("Reach the goal point.");
-            int end_grid_depth;
-            m_truck_ptr->m_octree->searchReturnDepth(end_point, 0, end_grid_depth);
-            double end_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-end_grid_depth);
-            /* if end grid is too large, skip it */
-            if (end_grid_size > 2.0){
-              reconstructPath(start_astar_node.id);
-            }
-            else{
-              aStarDataType end_point_node;
-              end_point_node.id = data_set_num_;
-              end_point_node.prev_id = start_astar_node.id;
-              end_point_node.pos = neighbor_center_point;
-              end_point_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
-              end_point_node.h_val = 0;
-              end_point_node.f_val = end_point_node.g_val;
-              data_set_vec_.push_back(end_point_node);
-              ++data_set_num_;
-              reconstructPath(end_point_node.id);
-            }
-            return true;
-          }
-          for (int k = 0; k < 6; ++k){
-            aStarDataType new_astar_node;
-            new_astar_node.prev_id = start_astar_node.id;
-            new_astar_node.ang_id = k;
-            new_astar_node.pos = neighbor_center_point;
-            new_astar_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
-            double ang_cost = 0;
-            /* if uav goes up in z axis */
-            if (k && 0x1 == 0)
-              ang_cost = new_astar_node.g_val;
-            else if (k != start_astar_node.ang_id)
-              ang_cost = neighbor_grid_gap * 0.707;
-            new_astar_node.g_val += ang_cost;
-            // Euclidean distance
-            new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
-            // Manhattan distance
-            // new_astar_node.h_val = m_ara_star_rate *
-            //   (fabs(neighbor_center_point.x()-m_land_point.x())
-            //    + fabs(neighbor_center_point.y()-m_land_point.y())
-            //    + fabs(neighbor_center_point.z()-m_land_point.z()));
-            new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
-            if (nodeInCloseSet(new_astar_node))
-              continue;
-            if (!nodeInOpenSet(new_astar_node))
-              {
-                new_astar_node.id = data_set_num_;
-                open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
-                data_set_vec_.push_back(new_astar_node);
-                ++data_set_num_;
-              }
-          }
-        }
-      }
-    }
-  ROS_INFO("A Star Search failed!!");
-  return false;
-}
+//       int start_octree_node_depth;
+//       m_truck_ptr->m_octree->searchReturnDepth(start_point, 0, start_octree_node_depth);
+//       double start_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-start_octree_node_depth);
+//       double neighbor_grid_gap = start_grid_size/2.0 + m_truck_ptr->m_octree->resolution/2.0;
+//       // Starts from 1, do not need first index, because this node is already visited
+//       for (int i = 1; i < m_graph_connected_mode; ++i){
+//         point3d neighbor_center_point;
+//         Vector3d index = m_seach_graph_connected_map[i];
+//         if (getGridCenter((start_point + point3d(neighbor_grid_gap*index[0],
+//                                                  neighbor_grid_gap*index[1],
+//                                                  neighbor_grid_gap*index[2])),
+//                           neighbor_center_point, -1)){
+//           if (neighbor_center_point.z() < 0)
+//             continue;
+//           /* If this neighbor is end_point, then stop */
+//           else if (neighbor_center_point == end_point){
+//             ROS_INFO("Reach the goal point.");
+//             int end_grid_depth;
+//             m_truck_ptr->m_octree->searchReturnDepth(end_point, 0, end_grid_depth);
+//             double end_grid_size = m_truck_ptr->m_octree->resolution * pow(2, m_truck_ptr->m_octree->tree_depth-end_grid_depth);
+//             /* if end grid is too large, skip it */
+//             if (end_grid_size > 2.0){
+//               reconstructPath(start_astar_node.id);
+//             }
+//             else{
+//               aStarDataType end_point_node;
+//               end_point_node.id = data_set_num_;
+//               end_point_node.prev_id = start_astar_node.id;
+//               end_point_node.pos = neighbor_center_point;
+//               end_point_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
+//               end_point_node.h_val = 0;
+//               end_point_node.f_val = end_point_node.g_val;
+//               data_set_vec_.push_back(end_point_node);
+//               ++data_set_num_;
+//               reconstructPath(end_point_node.id);
+//             }
+//             return true;
+//           }
+//           for (int k = 0; k < 6; ++k){
+//             aStarDataType new_astar_node;
+//             new_astar_node.prev_id = start_astar_node.id;
+//             new_astar_node.ang_id = k;
+//             new_astar_node.pos = neighbor_center_point;
+//             new_astar_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
+//             double ang_cost = 0;
+//             /* if uav goes up in z axis */
+//             if (k && 0x1 == 0)
+//               ang_cost = new_astar_node.g_val;
+//             else if (k != start_astar_node.ang_id)
+//               ang_cost = neighbor_grid_gap * 0.707;
+//             new_astar_node.g_val += ang_cost;
+//             // Euclidean distance
+//             new_astar_node.h_val = m_ara_star_rate * neighbor_center_point.distance(m_land_point);
+//             // Manhattan distance
+//             // new_astar_node.h_val = m_ara_star_rate *
+//             //   (fabs(neighbor_center_point.x()-m_land_point.x())
+//             //    + fabs(neighbor_center_point.y()-m_land_point.y())
+//             //    + fabs(neighbor_center_point.z()-m_land_point.z()));
+//             new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
+//             if (nodeInCloseSet(new_astar_node))
+//               continue;
+//             if (!nodeInOpenSet(new_astar_node))
+//               {
+//                 new_astar_node.id = data_set_num_;
+//                 open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
+//                 data_set_vec_.push_back(new_astar_node);
+//                 ++data_set_num_;
+//               }
+//           }
+//         }
+//       }
+//     }
+//   ROS_INFO("A Star Search failed!!");
+//   return false;
+// }
 
-void TruckServerNode::reconstructPath(int end_id)
-{
-  // From end to start
-  astar_path_vec_.push_back(m_land_point);
-  while(end_id != -1){
-    astar_path_vec_.push_back(data_set_vec_[end_id].pos);
-    end_id = data_set_vec_[end_id].prev_id;
-  }
-  astar_path_vec_.push_back(m_init_point);
-}
+// void TruckServerNode::reconstructPath(int end_id)
+// {
+//   // From end to start
+//   astar_path_vec_.push_back(m_land_point);
+//   while(end_id != -1){
+//     astar_path_vec_.push_back(data_set_vec_[end_id].pos);
+//     end_id = data_set_vec_[end_id].prev_id;
+//   }
+//   astar_path_vec_.push_back(m_init_point);
+// }
 
-std::vector<aStarDataType>::iterator TruckServerNode::getPosItearator(double f_val, char ch)
-{
-  if (ch == 'o'){
-    std::vector<aStarDataType>::iterator it = open_set_vec_.begin();
-    while (it != open_set_vec_.end()){
-      if (f_val > it->f_val) ++it;
-      else break;
-    }
-    return it;
-  }
-  else if (ch == 'c'){
-    std::vector<aStarDataType>::iterator it = close_set_vec_.begin();
-    while (it != close_set_vec_.end()){
-      if (f_val > it->f_val) ++it;
-      else break;
-    }
-    return it;
-  }
-}
+// std::vector<aStarDataType>::iterator TruckServerNode::getPosItearator(double f_val, char ch)
+// {
+//   if (ch == 'o'){
+//     std::vector<aStarDataType>::iterator it = open_set_vec_.begin();
+//     while (it != open_set_vec_.end()){
+//       if (f_val > it->f_val) ++it;
+//       else break;
+//     }
+//     return it;
+//   }
+//   else if (ch == 'c'){
+//     std::vector<aStarDataType>::iterator it = close_set_vec_.begin();
+//     while (it != close_set_vec_.end()){
+//       if (f_val > it->f_val) ++it;
+//       else break;
+//     }
+//     return it;
+//   }
+// }
 
-bool TruckServerNode::nodeInCloseSet(aStarDataType& node)
-{
-  std::vector<aStarDataType>::iterator it = close_set_vec_.begin();
-  std::vector<aStarDataType>::iterator it_pos;
-  while (it != close_set_vec_.end()){
-    if (node.pos == it->pos){
-      // If node in close set could be updated, move from close set to open set suitable position.
-      if (node.f_val < it->f_val){
-        node.id = it->id;
-        data_set_vec_[node.id] = node;
-        close_set_vec_.erase(it);
-        open_set_vec_.insert(getPosItearator(node.f_val, 'o'), node);
-      }
-      return true;
-    }
-    else ++it;
-  }
-  return false;
-}
+// bool TruckServerNode::nodeInCloseSet(aStarDataType& node)
+// {
+//   std::vector<aStarDataType>::iterator it = close_set_vec_.begin();
+//   std::vector<aStarDataType>::iterator it_pos;
+//   while (it != close_set_vec_.end()){
+//     if (node.pos == it->pos){
+//       // If node in close set could be updated, move from close set to open set suitable position.
+//       if (node.f_val < it->f_val){
+//         node.id = it->id;
+//         data_set_vec_[node.id] = node;
+//         close_set_vec_.erase(it);
+//         open_set_vec_.insert(getPosItearator(node.f_val, 'o'), node);
+//       }
+//       return true;
+//     }
+//     else ++it;
+//   }
+//   return false;
+// }
 
-bool TruckServerNode::nodeInOpenSet(aStarDataType& node)
-{
-  std::vector<aStarDataType>::iterator it = open_set_vec_.begin();
-  while (it != open_set_vec_.end()){
-    if (node.pos == it->pos){
-      // if node in open set could be updated
-      if (node.f_val < it->f_val){
-        // Because f_val decreased, judge whether node's position in open set should be moved.
-        node.id = it->id;
-        data_set_vec_[node.id] = node;
-        open_set_vec_.erase(it);
-        open_set_vec_.insert(getPosItearator(node.f_val, 'o'), node);
-      }
-      return true;
-    }
-    else ++it;
-  }
-  return false;
-}
+// bool TruckServerNode::nodeInOpenSet(aStarDataType& node)
+// {
+//   std::vector<aStarDataType>::iterator it = open_set_vec_.begin();
+//   while (it != open_set_vec_.end()){
+//     if (node.pos == it->pos){
+//       // if node in open set could be updated
+//       if (node.f_val < it->f_val){
+//         // Because f_val decreased, judge whether node's position in open set should be moved.
+//         node.id = it->id;
+//         data_set_vec_[node.id] = node;
+//         open_set_vec_.erase(it);
+//         open_set_vec_.insert(getPosItearator(node.f_val, 'o'), node);
+//       }
+//       return true;
+//     }
+//     else ++it;
+//   }
+//   return false;
+// }
 
 
 inline void TruckServerNode::point3dConvertToPoint32(point3d point3, geometry_msgs::Point32& point32)
@@ -813,7 +744,7 @@ void TruckServerNode::truckOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
   m_truck_odom = *msg;
   double cur_time = ros::Time().now().toSec();
-  if (cur_time - m_vehicles_visualize_prev_time > m_vehicles_visualize_gap_time){
+  if (cur_time - m_vehicles_visualize_prev_time > m_vehicles_visualize_period_time){
     m_vehicles_visualize_prev_time = cur_time;
     vehicleCurrentPosVisualization(0);
     if (m_has_car_inner)
