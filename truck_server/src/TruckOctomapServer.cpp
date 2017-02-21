@@ -82,16 +82,16 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
   // big truck
   else if (type == 2)
     {
-      base_size[0] = 6.0f; base_size[1] = 2.4f; base_size[2] = 1.4f;
-      roof_size[0] = 2.1f; roof_size[1] = 2.4f; roof_size[2] = 1.2f;
-      cargo_size[0] = 7.4f; cargo_size[1] = 2.4f; cargo_size[2] = 2.0f;
+      base_size[0] = 6.0f; base_size[1] = 2.4f; base_size[2] = 3.4f;
+      roof_size[0] = 0.0f; roof_size[1] = 0.0f; roof_size[2] = 0.0f;
+      cargo_size[0] = 0.0f; cargo_size[1] = 0.0f; cargo_size[2] = 0.0f;
     }
 
   // For uav safety margin
   for (int i = 0; i < 3; ++i){
-    // for truck without roof, base is the landing port
-    if (type != -1){
-      base_size[i] += 2*uav_safety_margin_size[i];
+    base_size[i] += 2*uav_safety_margin_size[i];
+    // for vehicles not having roof
+    if (type != -1 and type != 2){
       roof_size[i] += 2*uav_safety_margin_size[i];
     }
     if (cargo_size[0] > 0.1)
@@ -408,7 +408,8 @@ void TruckOctomapServer::laneMarkerVisualization()
   lane_strip_marker.color.b = 1.0f;
   for (uint32_t i = 0; i < 4; ++i){
     // Create the vertices for the points and lines
-    double radius = m_route_radius + i * 3.5 - 5.25;
+    //double radius = m_route_radius + i * 3.5 - 5.25;
+    double radius = m_route_radius + i * 5 - 7.5;
     if (m_route_name == (std::string)"circle"){
       for (int j = 0; j <= 360; ++j){
         geometry_msgs::Point p;

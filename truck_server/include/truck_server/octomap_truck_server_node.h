@@ -81,9 +81,10 @@ public:
   nav_msgs::Odometry m_truck_odom;
   nav_msgs::Odometry m_car_inner_odom;
   nav_msgs::Odometry m_car_outter_odom;
-  double m_truck_traj_recv_time;
-  double m_car_inner_traj_recv_time;
-  double m_car_outter_traj_recv_time;
+  double m_vehicle_traj_recv_time;
+  double m_vehicles_visualize_prev_time;
+  double m_vehicles_visualize_gap_time;
+
   int m_car_inner_type;
   int m_car_outter_type;
 
@@ -92,6 +93,7 @@ public:
   VehicleTrajectoryBase m_car_outter_traj_base;
 
   TruckOctomapServer* m_truck_ptr;
+  std::vector<TruckOctomapServer*> m_object_seg_ptr_vec;
 
   void pointOccupiedQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
   void pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg);
@@ -137,6 +139,7 @@ void TruckServerNode::onInit()
   private_nh.param("octomap_update_rate", m_octomap_update_feq, 1);
   private_nh.param("ARA_rate", m_ara_star_rate, 1.0);
   private_nh.param("graph_connected_mode", m_graph_connected_mode, 27);
+  private_nh.param("vehicles_visualize_gap_time", m_vehicles_visualize_gap_time, 0.5);
 
   /* 0 is only visualize vehicles current position, 1 is visualize their future position with connected octomap. */
   private_nh.param("vehicle_octomap_visualize_mode", m_vehicle_octomap_visualize_mode, 0);
@@ -146,10 +149,6 @@ void TruckServerNode::onInit()
   m_octomap_update_feq_cnt = 0;
   m_octo_publish_all_cnt = 0;
   m_octomap_boarder_val = m_octomap_res * pow(2, m_octomap_tree_depth-1);
-
-  m_truck_traj_recv_time = -1;
-  m_car_outter_traj_recv_time = -1;
-  m_car_inner_traj_recv_time = -1;
 
   aStarSearchGraphInit();
 
@@ -174,6 +173,8 @@ void TruckServerNode::onInit()
   std::cout << "onInit finished.\n";
   ROS_INFO("onInit");
 
+  m_vehicles_visualize_prev_time = ros::Time().now().toSec();
+  m_vehicle_traj_recv_time = m_vehicles_visualize_prev_time;
 
   // todo: get from launch
   spline_res = 0.2f;
@@ -251,94 +252,94 @@ void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
 
 void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
-  double cur_time = ros::Time().now().toSec();
-  if (m_truck_traj_recv_time < 0)
-    m_truck_traj_recv_time = cur_time;
-  else if (cur_time - m_truck_traj_recv_time > 1.0){
-    m_truck_traj_recv_time = cur_time;
-    int traj_order = msg->layout.dim[0].size;
-    std::vector<double> data;
-    for (int i = 0; i < 2*traj_order+1; ++i)
-      data.push_back(msg->data[i]);
-    m_truck_traj_base.onInit(traj_order, data);
-  }
+  // double cur_time = ros::Time().now().toSec();
+  // if (m_truck_traj_recv_time < 0)
+  //   m_truck_traj_recv_time = cur_time;
+  // else if (cur_time - m_truck_traj_recv_time > 1.0){
+  //   m_truck_traj_recv_time = cur_time;
+  //   int traj_order = msg->layout.dim[0].size;
+  //   std::vector<double> data;
+  //   for (int i = 0; i < 2*traj_order+1; ++i)
+  //     data.push_back(msg->data[i]);
+  //   m_truck_traj_base.onInit(traj_order, data);
+  // }
 }
 
 
 void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
-  double cur_time = ros::Time().now().toSec();
-  if (m_car_inner_traj_recv_time < 0){
-    m_car_inner_traj_recv_time = cur_time;
-    return;
-  }
-  else if (cur_time - m_car_inner_traj_recv_time < 1.0)
-    return;
-  m_car_inner_traj_recv_time = cur_time;
+  // double cur_time = ros::Time().now().toSec();
+  // if (m_car_inner_traj_recv_time < 0){
+  //   m_car_inner_traj_recv_time = cur_time;
+  //   return;
+  // }
+  // else if (cur_time - m_car_inner_traj_recv_time < 1.0)
+  //   return;
+  // m_car_inner_traj_recv_time = cur_time;
 
-  if (m_octo_publish_all_cnt == 0)
-    m_truck_ptr->m_octree->clear();
-  int traj_order = msg->layout.dim[0].size;
-  std::vector<double> data;
-  for (int i = 0; i < 2*traj_order+1; ++i)
-    data.push_back(msg->data[i]);
-  m_car_inner_traj_base.onInit(traj_order, data);
+  // if (m_octo_publish_all_cnt == 0)
+  //   m_truck_ptr->m_octree->clear();
+  // int traj_order = msg->layout.dim[0].size;
+  // std::vector<double> data;
+  // for (int i = 0; i < 2*traj_order+1; ++i)
+  //   data.push_back(msg->data[i]);
+  // m_car_inner_traj_base.onInit(traj_order, data);
 
-  if (m_vehicle_octomap_visualize_mode == 1){
-    for (int i = 0; i <=5; ++i){
-      Vector3d vehicle_pos = m_car_inner_traj_base.nOrderVehicleTrajectory(0, i*1.0);
-      Vector3d vehicle_vel = m_car_inner_traj_base.nOrderVehicleTrajectory(1, i*1.0);
-      m_truck_ptr->WriteVehicleOctree(m_car_inner_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
-    }
-    ++m_octo_publish_all_cnt;
-    if (m_octo_publish_all_cnt >= 2){
-      //vehicleCurrentPosVisualization(0);
-      // truck without roof
-      vehicleCurrentPosVisualization(-1);
-      m_truck_ptr->publishTruckAll(ros::Time().now());
-      m_octo_publish_all_cnt = 0;
-      // test
-      runAstarTest();
-    }
-  }
+  // if (m_vehicle_octomap_visualize_mode == 1){
+  //   for (int i = 0; i <=5; ++i){
+  //     Vector3d vehicle_pos = m_car_inner_traj_base.nOrderVehicleTrajectory(0, i*1.0);
+  //     Vector3d vehicle_vel = m_car_inner_traj_base.nOrderVehicleTrajectory(1, i*1.0);
+  //     m_truck_ptr->WriteVehicleOctree(m_car_inner_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
+  //   }
+  //   ++m_octo_publish_all_cnt;
+  //   if (m_octo_publish_all_cnt >= 2){
+  //     //vehicleCurrentPosVisualization(0);
+  //     // truck without roof
+  //     vehicleCurrentPosVisualization(-1);
+  //     m_truck_ptr->publishTruckAll(ros::Time().now());
+  //     m_octo_publish_all_cnt = 0;
+  //     // test
+  //     runAstarTest();
+  //   }
+  // }
 }
 
 
 void TruckServerNode::carOutterTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
-  double cur_time = ros::Time().now().toSec();
-  if (m_car_outter_traj_recv_time < 0){
-    m_car_outter_traj_recv_time = cur_time;
-    return;
-  }
-  else if (cur_time - m_car_outter_traj_recv_time < 1.0)
-    return;
-  m_car_outter_traj_recv_time = cur_time;
+  // double cur_time = ros::Time().now().toSec();
+  // if (m_car_outter_traj_recv_time < 0){
+  //   m_car_outter_traj_recv_time = cur_time;
+  //   return;
+  // }
+  // else if (cur_time - m_car_outter_traj_recv_time < 1.0)
+  //   return;
+  // m_car_outter_traj_recv_time = cur_time;
 
-  if (m_octo_publish_all_cnt == 0)
-    m_truck_ptr->m_octree->clear();
-  int traj_order = msg->layout.dim[0].size;
-  std::vector<double> data;
-  for (int i = 0; i < 2*traj_order+1; ++i)
-    data.push_back(msg->data[i]);
-  m_car_outter_traj_base.onInit(traj_order, data);
-  if (m_vehicle_octomap_visualize_mode == 1){
-    for (int i = 0; i <=5; ++i){
-      Vector3d vehicle_pos = m_car_outter_traj_base.nOrderVehicleTrajectory(0, i*1.0);
-      Vector3d vehicle_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, i*1.0);
-      m_truck_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
-    }
-    ++m_octo_publish_all_cnt;
-    if (m_octo_publish_all_cnt >= 2){
-      //vehicleCurrentPosVisualization(0);
-      // truck without roof
-      vehicleCurrentPosVisualization(-1);
-      m_truck_ptr->publishTruckAll(ros::Time().now());
-      m_octo_publish_all_cnt = 0;
-      // test
-      runAstarTest();
-    }
-  }
+  // if (m_octo_publish_all_cnt == 0)
+  //   m_truck_ptr->m_octree->clear();
+  // int traj_order = msg->layout.dim[0].size;
+  // std::vector<double> data;
+  // for (int i = 0; i < 2*traj_order+1; ++i)
+  //   data.push_back(msg->data[i]);
+  // m_car_outter_traj_base.onInit(traj_order, data);
+  // if (m_vehicle_octomap_visualize_mode == 1){
+  //   for (int i = 0; i <=5; ++i){
+  //     Vector3d vehicle_pos = m_car_outter_traj_base.nOrderVehicleTrajectory(0, i*1.0);
+  //     Vector3d vehicle_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, i*1.0);
+  //     m_truck_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(vehicle_pos.x(), vehicle_pos.y(), 0.0f, 0.0, 0.0, atan2(vehicle_vel.y(), vehicle_vel.x())));
+  //   }
+  //   ++m_octo_publish_all_cnt;
+  //   if (m_octo_publish_all_cnt >= 2){
+  //     //vehicleCurrentPosVisualization(0);
+  //     // truck without roof
+  //     vehicleCurrentPosVisualization(-1);
+  //     m_truck_ptr->publishTruckAll(ros::Time().now());
+  //     m_octo_publish_all_cnt = 0;
+  //     // test
+  //     runAstarTest();
+  //   }
+  // }
 }
 
 
@@ -839,6 +840,17 @@ inline void TruckServerNode::point3dConvertToPoint32(point3d point3, geometry_ms
 void TruckServerNode::truckOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
   m_truck_odom = *msg;
+  double cur_time = ros::Time().now().toSec();
+  if (cur_time - m_vehicles_visualize_prev_time > m_vehicles_visualize_gap_time){
+    m_vehicles_visualize_prev_time = cur_time;
+    vehicleCurrentPosVisualization(0);
+    if (m_has_car_inner)
+      vehicleCurrentPosVisualization(1); // 1 is small car
+    if (m_has_car_outter)
+      vehicleCurrentPosVisualization(2); // 2 is big car
+    m_truck_ptr->publishTruckAll(ros::Time().now());
+    m_truck_ptr->m_octree->clear();
+  }
 }
 
 void TruckServerNode::carInnerOdomCallback(const nav_msgs::OdometryConstPtr& msg)
