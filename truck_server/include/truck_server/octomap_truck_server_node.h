@@ -142,6 +142,7 @@ public:
   // test
   void runAstarTest();
   void uavRandomCheatOdom();
+  void controlPtsRandomSet();
 
   // iterative search
   void runIterativeSearching();
@@ -298,24 +299,28 @@ void TruckServerNode::onIterativeSearching()
     m_control_point_vec.push_back(control_pt_n);
     break;
   }
-
-  /* publish control points */
-  controlPolygonDisplay(1);
-
-  for (int i = 0; i < m_control_point_vec.size(); ++i){
-    std::cout << "[Index] " << i << ": " << m_control_point_vec[i].x() << ", "
-              << m_control_point_vec[i].y() << ", " << m_control_point_vec[i].z() << "\n";
-  }
 }
 
 void TruckServerNode::runIterativeSearching()
 {
   // test
-  // uav odom cheat mode
+  /* uav odom cheat mode */
   uavRandomCheatOdom();
 
   initIterativeSearching();
   onIterativeSearching();
+
+  /* test: specific control points test */
+  //controlPtsRandomSet();
+
+  /* publish control points */
+  controlPolygonDisplay(1);
+
+  /* Print the value of control points */
+  for (int i = 0; i < m_control_point_vec.size(); ++i){
+    std::cout << "[Index] " << i << ": " << m_control_point_vec[i].x() << ", "
+              << m_control_point_vec[i].y() << ", " << m_control_point_vec[i].z() << "\n";
+  }
 }
 
 void TruckServerNode::uavRandomCheatOdom()
@@ -326,9 +331,26 @@ void TruckServerNode::uavRandomCheatOdom()
   m_uav_odom.pose.pose.position.x += 1.0 + (-3.0) * cos(m_uav_odom.pose.pose.orientation.w);
   m_uav_odom.pose.pose.position.y += 1.0 + (-3.0) * sin(m_uav_odom.pose.pose.orientation.w);
   // velocity: 0, 0, 0
-  m_uav_odom.twist.twist.linear.x = 2.0;
-  m_uav_odom.twist.twist.linear.y = 2.0;
+  m_uav_odom.twist.twist.linear.x = 5.0;
+  m_uav_odom.twist.twist.linear.y = 5.0;
   m_uav_odom.twist.twist.linear.z = 0.0;
+}
+
+void TruckServerNode::controlPtsRandomSet()
+{
+  /* test: specific control points test */
+  if (!m_control_point_vec.empty()){
+    controlPolygonDisplay(0);
+    m_control_point_vec.clear();
+  }
+  Vector3d pt;
+  pt = Vector3d(0, 0, 5); m_control_point_vec.push_back(pt);
+  pt = Vector3d(2, 2, 5); m_control_point_vec.push_back(pt);
+  pt = Vector3d(3, 0, 5); m_control_point_vec.push_back(pt);
+  pt = Vector3d(3, 0, 8); m_control_point_vec.push_back(pt);
+  pt = Vector3d(6, 3, 4); m_control_point_vec.push_back(pt);
+  pt = Vector3d(8, 5, 2); m_control_point_vec.push_back(pt);
+  pt = Vector3d(12, 8, 1); m_control_point_vec.push_back(pt);
 }
 
 void TruckServerNode::updateObstacleOctomap(TruckOctomapServer* obstacle_ptr, double t0)
