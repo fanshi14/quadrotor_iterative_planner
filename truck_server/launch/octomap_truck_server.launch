@@ -5,6 +5,7 @@
   <arg name="has_car_outter" default="true"/>
   <arg name="has_car_inner" default="true"/>
   <arg name="spline_degree" default="2"/>
+  <arg name="empty_world" default="true"/>
 
   <node pkg="truck_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
     <param name="resolution" value="0.2" />
@@ -90,7 +91,14 @@
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(find truck_server)/config/truck_octomap.rviz" />
   <node pkg="truck_server" type="lane_marker_flag.py" name="lane_marker_flag" />
 
-  <group if="$(arg has_uav)">
+  <group if="$(arg empty_world)">
+    <!-- Empty environment -->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch" >
+      <arg name="gui" value="false" />
+    </include>
+  </group>
+
+  <group unless="$(arg empty_world)">
     <!-- Task1 environment with moving truck -->
     <!-- <include file="$(find jsk_mbzirc_common)/launch/mbzirc_arena.launch" > -->
     <!--   <arg name="gui" default="true"  /> -->
@@ -98,15 +106,12 @@
     <!-- </include> -->
 
     <!-- Task1 environment only -->
-    <!-- <include file="$(find jsk_mbzirc_common)/launch/mbzirc_arena_1.launch" > -->
-    <!--   <arg name="gui" value="true" /> -->
-    <!-- </include> -->
-
-    <!-- Empty environment -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" >
+    <include file="$(find jsk_mbzirc_common)/launch/mbzirc_arena_1.launch" >
       <arg name="gui" value="false" />
     </include>
+  </group>
 
+  <group if="$(arg has_uav)">
     <include file="$(find hector_quadrotor_gazebo)/launch/spawn_quadrotor.launch" >
       <arg name="name" value="quadrotor"/>
       <!-- <arg name="model" value="$(find jsk_mbzirc_tasks)/urdf/hawk.urdf.xacro"/> -->
