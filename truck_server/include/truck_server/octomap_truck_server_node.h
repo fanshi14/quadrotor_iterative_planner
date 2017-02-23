@@ -15,6 +15,7 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <quadrotor_trajectory/VehicleTrajectoryBase.h>
+#include <bspline_ros/bsplineGenerate.h>
 
 using namespace octomap_server;
 using namespace vehicle_trajectory_base;
@@ -97,6 +98,11 @@ public:
 
   TruckOctomapServer* m_truck_ptr;
 
+  /* bspline generator */
+  bsplineGenerate m_bspline_generator;
+  int m_spline_degree;
+  std::string m_spline_path_pub_topic_name;
+
   /* iterative searching */
   std::vector<TruckOctomapServer*> m_object_seg_ptr_vec;
   int m_n_segments;
@@ -162,6 +168,7 @@ void TruckServerNode::onInit()
   private_nh.param("has_car_inner", m_has_car_inner, true);
   private_nh.param("has_car_outter", m_has_car_outter, true);
   private_nh.param("vehilce_inner_type", m_car_inner_type, 1);
+  private_nh.param("spline_degree", m_spline_degree, 2);
   private_nh.param("vehilce_outter_type", m_car_outter_type, 2);
   private_nh.param("octomap_update_rate", m_octomap_update_feq, 1);
   private_nh.param("ARA_rate", m_ara_star_rate, 1.0);
@@ -170,7 +177,9 @@ void TruckServerNode::onInit()
   private_nh.param("global_planning_period_time", m_global_planning_period_time, 1.0);
   private_nh.param("target_height", m_target_height, 0.8);
   private_nh.param("uav_default_upbound_vel", m_uav_default_upbound_vel, 5.0);
+  private_nh.param("spline_path_pub_topic_name", m_spline_path_pub_topic_name, (std::string)"spline_path");
 
+  m_bspline_generator.onInit(m_spline_degree, true, m_spline_path_pub_topic_name);
 
   /* 0 is only visualize vehicles current position, 1 is visualize their future position with connected octomap. */
   private_nh.param("vehicle_octomap_visualize_mode", m_vehicle_octomap_visualize_mode, 0);
@@ -247,19 +256,27 @@ void TruckServerNode::initIterativeSearching()
                m_uav_odom.twist.twist.linear.y*m_segment_period_time/2.0,
                m_uav_odom.twist.twist.linear.z*m_segment_period_time/2.0);
     Vector3d temp_3d;
-    if (getGridCenter(obstacle_ptr, control_pt_1, temp_3d, -1)){
-      m_object_seg_ptr_vec.push_back(obstacle_ptr);
-      m_control_point_vec.push_back(control_pt_1);
-      /* if we have 2 segments on z axis, we have 3 segments in total (because of first and last point and its neighbor control points generating based on velocity constraits) */
-      m_landing_time += m_segment_period_time;
-      m_n_segments = int(m_landing_time / m_segment_period_time);
-      break;
-    }
-    else{
-      ROS_WARN("Control points 1 could not use!! Decrease initial gap to its 1/2.");
-      m_segment_period_time /= 2.0;
-      obstacle_ptr->m_octree->clear();
-    }
+    // todo: collision detection
+    m_object_seg_ptr_vec.push_back(obstacle_ptr);
+    m_control_point_vec.push_back(control_pt_1);
+    /* if we have 2 segments on z axis, we have 3 segments in total (because of first and last point and its neighbor control points generating based on velocity constraits) */
+    m_landing_time += m_segment_period_time;
+    m_n_segments = int(m_landing_time / m_segment_period_time);
+    break;
+
+    // if (getGridCenter(obstacle_ptr, control_pt_1, temp_3d, -1)){
+    //   m_object_seg_ptr_vec.push_back(obstacle_ptr);
+    //   m_control_point_vec.push_back(control_pt_1);
+    //   /* if we have 2 segments on z axis, we have 3 segments in total (because of first and last point and its neighbor control points generating based on velocity constraits) */
+    //   m_landing_time += m_segment_period_time;
+    //   m_n_segments = int(m_landing_time / m_segment_period_time);
+    //   break;
+    // }
+    // else{
+    //   ROS_WARN("Control points 1 could not use!! Decrease initial gap to its 1/2.");
+    //   m_segment_period_time /= 2.0;
+    //   obstacle_ptr->m_octree->clear();
+    // }
     // todo: check land point's forhead control point to decide segment_period_time
   }
 }
@@ -562,8 +579,10 @@ void TruckServerNode::controlPolygonDisplay(int mode){
     vector3dConvertToPoint32(m_control_point_vec[i], control_point);
     control_polygon_points.polygon.points.push_back(control_point);
   }
-  if (mode == 1)
-    pub_control_points_.publish(control_polygon_points);
+  if (mode == 1){
+    //pub_control_points_.publish(control_polygon_points);
+    m_bspline_generator.bsplineParamInput(&control_polygon_points);
+  }
 
   line_list_marker.id = id_cnt;
   ++id_cnt;

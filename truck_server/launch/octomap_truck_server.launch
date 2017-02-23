@@ -13,6 +13,7 @@
     <param name="frame_id" type="string" value="world" />
     <param name="has_car_inner" value="$(arg has_car_inner)" />
     <param name="has_car_outter" value="$(arg has_car_outter)" />
+    <param name="spline_degree" value="$(arg spline_degree)" />
     <param name="ARA_rate" value="2.0" />
     <!-- 7 is planar connected, 19 is including line connected, 27 is including verticle connected -->
     <param name="graph_connected_mode" value="7" />

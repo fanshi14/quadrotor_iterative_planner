@@ -17,6 +17,7 @@ set(PACKAGE_DEPENDENCIES
   octomap_server
   geometry_msgs
   quadrotor_trajectory
+  bspline_ros
 )
 
 
@@ -33,8 +34,14 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
   ${OCTOMAP_INCLUDE_DIRS}
   ${QUADROTOR_TRAJECTORY_INCLUDE_DIRS}
+  ${BSPLINE_ROS_INCLUDE_DIRS}
+  ## tinyspline
+  /home/shi/ros/shi_catkin_ws/build/bspline_ros/bspline/tinyspline/library
 )
 
+## Octomap not support c++11, tinyspline origin version requires c++11
+## We need to delete related c++11 sentences in tinysplinecpp.h file.
+## set(CMAKE_CXX_FLAGS "-std=c++11")
 
 #generate_dynamic_reconfigure_options(cfg/OctomapServer.cfg)
 
@@ -50,13 +57,17 @@ set(LINK_LIBS
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
   ${QUADROTOR_TRAJECTORY_LIBRARIES}
+  ${BSPLINE_ROS_LIBRARIES}
 )
 
 add_library(${PROJECT_NAME} src/TruckOctomapServer.cpp)
 target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
 add_executable(octomap_truck_server_node src/octomap_truck_server_node.cpp)
-target_link_libraries(octomap_truck_server_node ${PROJECT_NAME} ${LINK_LIBS})
+target_link_libraries(octomap_truck_server_node
+  ## tinyspline
+  /home/shi/ros/shi_catkin_ws/build/bspline_ros/bspline/tinyspline/build/lib/libtinysplinecpp.so
+  ${PROJECT_NAME} ${LINK_LIBS})
 
 add_executable(uav_teleop_keyboard src/uav_teleop_keyboard.cpp)
 target_link_libraries(uav_teleop_keyboard ${PROJECT_NAME} ${LINK_LIBS})
