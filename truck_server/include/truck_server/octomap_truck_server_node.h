@@ -12,6 +12,7 @@
 #include <std_msgs/Float64.h>
 #include <std_msgs/Float64MultiArray.h>
 #include <iostream>
+#include <math.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <quadrotor_trajectory/VehicleTrajectoryBase.h>
@@ -285,9 +286,9 @@ void TruckServerNode::onIterativeSearching()
 {
 
   /* Simple generate control points, ignoring obstacles avoidance */
-  Vector3d target_init_pt(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, m_target_height);
+  Vector3d target_cur_pt(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, m_target_height);
   for (int i = 1; i <= m_n_segments-1; ++i){
-    Vector3d cur_control_pt = (m_control_point_vec[0] - target_init_pt) / (m_n_segments-1) * (m_n_segments-1-i) + m_truck_traj_base.nOrderVehicleTrajectory(0, i*m_segment_period_time);
+    Vector3d cur_control_pt = (m_control_point_vec[0] - target_cur_pt) / (m_n_segments-1) * (m_n_segments-1-i) + m_truck_traj_base.nOrderVehicleTrajectory(0, i*m_segment_period_time) + Vector3d(0.0, 0.0, m_target_height);
     m_control_point_vec.push_back(cur_control_pt);
   }
 
@@ -297,7 +298,8 @@ void TruckServerNode::onIterativeSearching()
   while(1){
     TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
     updateObstacleOctomap(obstacle_ptr, m_landing_time-m_segment_period_time);
-    Vector3d control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time);
+    Vector3d control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, m_target_height);
+    // todo: adding landing speed. Currently z-axis value is 0 in last triangle.
     Vector3d control_pt_n_1 = control_pt_n -
       m_truck_traj_base.nOrderVehicleTrajectory(1, m_landing_time) * m_segment_period_time/2.0;
 
@@ -335,7 +337,7 @@ void TruckServerNode::runIterativeSearching()
 
   /* Print the value of control points */
   for (int i = 0; i < m_control_point_vec.size(); ++i){
-    std::cout << "[Index] " << i << ": " << m_control_point_vec[i].x() << ", "
+    std::cout << "[Control pt] " << i << ": " << m_control_point_vec[i].x() << ", "
               << m_control_point_vec[i].y() << ", " << m_control_point_vec[i].z() << "\n";
   }
 }
@@ -582,6 +584,18 @@ void TruckServerNode::controlPolygonDisplay(int mode){
   if (mode == 1){
     //pub_control_points_.publish(control_polygon_points);
     m_bspline_generator.bsplineParamInput(&control_polygon_points);
+    /* Print knot velocity */
+    m_bspline_generator.getDerive();
+    std::cout << "Print Knot info. \n" ;
+    for (int j = m_bspline_generator.m_deg; j < m_bspline_generator.m_n_knots - m_bspline_generator.m_deg; ++j){
+      double knot_time = m_bspline_generator.m_knotpts[j];
+      std::vector<double> knot_vel_vec = m_bspline_generator.evaluateDerive(knot_time);
+      double knot_vel = sqrt(pow(knot_vel_vec[0],2) + pow(knot_vel_vec[1],2) + pow(knot_vel_vec[2],2));
+      if (knot_vel > 10.0)
+        ROS_ERROR("!!!!!!!!!!!!!!!!!!!! Knot vel is too large!!!!");
+      std::cout << "[Knot] " << j << ": " << knot_time << ", vel: " << knot_vel << "|| "
+                << knot_vel_vec[0] << ", "<< knot_vel_vec[1] << ", "<< knot_vel_vec[2] << "\n";
+    }
   }
 
   line_list_marker.id = id_cnt;

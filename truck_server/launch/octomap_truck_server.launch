@@ -48,7 +48,7 @@
     <param name="vehicle_traj_path_pub_topic_name" value="/truck_traj_path" />
     <param name="vehicle_traj_polynomial_order" value="8" />
     <param name="vehicle_traj_derivation_order" value="4" />
-    <param name="vehicle_lambda_D" value="1.0" />
+    <param name="vehicle_lambda_D" value="10.0" />
     <param name="vehicle_estimate_odom_number" value="40" />
     <param name="vehicle_trajectory_generate_freqency" value="5" />
     <param name="vehicle_visualization_predict_time" value="5.0" />
@@ -63,7 +63,7 @@
       <param name="vehicle_traj_path_pub_topic_name" value="/car_inner_path" />
       <param name="vehicle_traj_polynomial_order" value="8" />
       <param name="vehicle_traj_derivation_order" value="4" />
-      <param name="vehicle_lambda_D" value="1.0" />
+      <param name="vehicle_lambda_D" value="10.0" />
       <param name="vehicle_estimate_odom_number" value="40" />
       <param name="vehicle_trajectory_generate_freqency" value="5" />
       <param name="vehicle_visualization_predict_time" value="5.0" />
@@ -80,7 +80,7 @@
       <param name="vehicle_traj_path_pub_topic_name" value="/car_outter_path" />
       <param name="vehicle_traj_polynomial_order" value="8" />
       <param name="vehicle_traj_derivation_order" value="4" />
-      <param name="vehicle_lambda_D" value="1.0" />
+      <param name="vehicle_lambda_D" value="10.0" />
       <param name="vehicle_estimate_odom_number" value="40" />
       <param name="vehicle_trajectory_generate_freqency" value="5" />
       <param name="vehicle_visualization_predict_time" value="5.0" />
