@@ -362,14 +362,15 @@ void TruckServerNode::controlPtsRandomSet()
     controlPolygonDisplay(0);
     m_control_point_vec.clear();
   }
+  m_segment_period_time = 1.0;
   Vector3d pt;
-  pt = Vector3d(0, 0, 5); m_control_point_vec.push_back(pt);
-  pt = Vector3d(2, 2, 5); m_control_point_vec.push_back(pt);
-  pt = Vector3d(3, 0, 5); m_control_point_vec.push_back(pt);
-  pt = Vector3d(3, 0, 8); m_control_point_vec.push_back(pt);
-  pt = Vector3d(6, 3, 4); m_control_point_vec.push_back(pt);
-  pt = Vector3d(8, 5, 2); m_control_point_vec.push_back(pt);
-  pt = Vector3d(12, 8, 1); m_control_point_vec.push_back(pt);
+  pt = Vector3d(0, 0, 8); m_control_point_vec.push_back(pt);
+  pt = Vector3d(2, 1, 7); m_control_point_vec.push_back(pt);
+  pt = Vector3d(3, 2, 6); m_control_point_vec.push_back(pt);
+  pt = Vector3d(2, 4, 4); m_control_point_vec.push_back(pt);
+  pt = Vector3d(1, 5, 3); m_control_point_vec.push_back(pt);
+  pt = Vector3d(0, 7, 1); m_control_point_vec.push_back(pt);
+  pt = Vector3d(-1, 8, 1); m_control_point_vec.push_back(pt);
 }
 
 void TruckServerNode::updateObstacleOctomap(TruckOctomapServer* obstacle_ptr, double t0)
@@ -576,7 +577,7 @@ void TruckServerNode::controlPolygonDisplay(int mode){
 
   for (int i = 0; i < control_points_num; ++i){
     geometry_msgs::Point32 control_point, time_point;
-    time_point.x = time_point.y = time_point.z = m_segment_period_time * i;
+    time_point.x = m_segment_period_time * i;
     control_polygon_points.polygon.points.push_back(time_point);
     vector3dConvertToPoint32(m_control_point_vec[i], control_point);
     control_polygon_points.polygon.points.push_back(control_point);
