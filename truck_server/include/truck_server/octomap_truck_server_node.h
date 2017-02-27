@@ -89,6 +89,8 @@ public:
   double m_vehicles_visualize_period_time;
   std_msgs::Float64MultiArray m_car_inner_traj_msg;
   std_msgs::Float64MultiArray m_car_outter_traj_msg;
+  bool m_car_inner_traj_msg_recv_flag;
+  bool m_car_outter_traj_msg_recv_flag;
 
   int m_car_inner_type;
   int m_car_outter_type;
@@ -121,7 +123,7 @@ public:
   double m_truck_vel_gt;
   double m_car_outter_vel_gt;
   double m_car_inner_vel_gt;
-  Vector3d nOrderVehicleTrajectoryGroundTruth(int order, double t0);
+  Vector3d nOrderVehicleTrajectoryFromGroundTruth(int order, double t0);
   void updateObstacleOctomapFromGroundTruth(TruckOctomapServer* obstacle_ptr, double t0);
   bool m_ground_truth_flag;
 
@@ -207,6 +209,9 @@ void TruckServerNode::onInit()
   m_octo_publish_all_cnt = 0;
   m_octomap_boarder_val = m_octomap_res * pow(2, m_octomap_tree_depth-1);
 
+  m_car_inner_traj_msg_recv_flag = false;
+  m_car_outter_traj_msg_recv_flag = false;
+
   aStarSearchGraphInit();
 
   /* Subscriber */
@@ -268,9 +273,9 @@ void TruckServerNode::initIterativeSearching()
   while(1){
     TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
     if (m_ground_truth_flag)
-      updateObstacleOctomap(obstacle_ptr, 0);
-    else
       updateObstacleOctomapFromGroundTruth(obstacle_ptr, 0);
+    else
+      updateObstacleOctomap(obstacle_ptr, 0);
     Vector3d control_pt_1 = control_pt_0 +
       Vector3d(m_uav_odom.twist.twist.linear.x*m_segment_period_time/2.0,
                m_uav_odom.twist.twist.linear.y*m_segment_period_time/2.0,
@@ -309,9 +314,9 @@ void TruckServerNode::onIterativeSearching()
   for (int i = 1; i <= m_n_segments-1; ++i){
     Vector3d cur_control_pt;
     if (m_ground_truth_flag)
-      cur_control_pt = (m_control_point_vec[0] - target_cur_pt) / (m_n_segments-1) * (m_n_segments-1-i) + m_truck_traj_base.nOrderVehicleTrajectory(0, i*m_segment_period_time) + Vector3d(0.0, 0.0, m_target_height);
+      cur_control_pt = (m_control_point_vec[0] - target_cur_pt) / (m_n_segments-1) * (m_n_segments-1-i) + nOrderVehicleTrajectoryFromGroundTruth(0, i*m_segment_period_time) + Vector3d(0.0, 0.0, m_target_height);
     else
-      cur_control_pt = (m_control_point_vec[0] - target_cur_pt) / (m_n_segments-1) * (m_n_segments-1-i) + nOrderVehicleTrajectoryGroundTruth(0, i*m_segment_period_time) + Vector3d(0.0, 0.0, m_target_height);
+      cur_control_pt = (m_control_point_vec[0] - target_cur_pt) / (m_n_segments-1) * (m_n_segments-1-i) + m_truck_traj_base.nOrderVehicleTrajectory(0, i*m_segment_period_time) + Vector3d(0.0, 0.0, m_target_height);
     m_control_point_vec.push_back(cur_control_pt);
   }
 
@@ -323,15 +328,15 @@ void TruckServerNode::onIterativeSearching()
     Vector3d control_pt_n;
     Vector3d control_pt_n_1;
     if (m_ground_truth_flag){
-      updateObstacleOctomap(obstacle_ptr, m_landing_time-m_segment_period_time);
-      control_pt_n = nOrderVehicleTrajectoryGroundTruth(0, m_landing_time) + Vector3d(0.0, 0.0, m_target_height);
+      updateObstacleOctomapFromGroundTruth(obstacle_ptr, m_landing_time-m_segment_period_time);
+      control_pt_n = nOrderVehicleTrajectoryFromGroundTruth(0, m_landing_time) + Vector3d(0.0, 0.0, m_target_height);
     // todo: adding landing speed. Currently z-axis value is 0 in last triangle.
       control_pt_n_1 = control_pt_n -
-        nOrderVehicleTrajectoryGroundTruth(1, m_landing_time) * m_segment_period_time/2.0;
+        nOrderVehicleTrajectoryFromGroundTruth(1, m_landing_time) * m_segment_period_time/2.0;
     }
     else{
-      updateObstacleOctomapFromGroundTruth(obstacle_ptr, m_landing_time-m_segment_period_time);
-    control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, m_target_height);
+      updateObstacleOctomap(obstacle_ptr, m_landing_time-m_segment_period_time);
+      control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, m_target_height);
     // todo: adding landing speed. Currently z-axis value is 0 in last triangle.
     control_pt_n_1 = control_pt_n -
       m_truck_traj_base.nOrderVehicleTrajectory(1, m_landing_time) * m_segment_period_time/2.0;
@@ -429,7 +434,7 @@ void TruckServerNode::updateObstacleOctomap(TruckOctomapServer* obstacle_ptr, do
   }
 }
 
-Vector3d TruckServerNode::nOrderVehicleTrajectoryGroundTruth(int order, double t0)
+Vector3d TruckServerNode::nOrderVehicleTrajectoryFromGroundTruth(int order, double t0)
 {
   double ang = atan2(m_truck_odom.pose.pose.position.x, -m_truck_odom.pose.pose.position.y);
   double r = m_route_radius_gt;
@@ -529,7 +534,7 @@ void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayCo
     m_truck_traj_base.onInit(traj_order, data);
 
     // Load car inner's trajectory paramaters
-    if (m_has_car_inner){
+    if (m_has_car_inner && m_car_inner_traj_msg_recv_flag){
       int traj_order1 = m_car_inner_traj_msg.layout.dim[0].size;
       std::vector<double> data1;
       for (int i = 0; i < 2*traj_order1+1; ++i)
@@ -538,7 +543,7 @@ void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayCo
     }
 
     // Load car outter's trajectory paramaters
-    if (m_has_car_outter){
+    if (m_has_car_outter && m_car_outter_traj_msg_recv_flag){
       int traj_order1 = m_car_outter_traj_msg.layout.dim[0].size;
       std::vector<double> data1;
       for (int i = 0; i < 2*traj_order1+1; ++i)
@@ -554,6 +559,7 @@ void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayCo
 void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
   m_car_inner_traj_msg = *msg;
+  m_car_inner_traj_msg_recv_flag = true;
 
   // if (m_vehicle_octomap_visualize_mode == 1){
   //   for (int i = 0; i <=5; ++i){
@@ -567,6 +573,7 @@ void TruckServerNode::carInnerTrajParamCallback(const std_msgs::Float64MultiArra
 void TruckServerNode::carOutterTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
   m_car_outter_traj_msg = *msg;
+  m_car_outter_traj_msg_recv_flag = true;
 }
 
 void TruckServerNode::pointDepthQueryCallback(const geometry_msgs::Vector3ConstPtr& msg){

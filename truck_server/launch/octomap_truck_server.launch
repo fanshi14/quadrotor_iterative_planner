@@ -19,6 +19,7 @@
     <param name="graph_connected_mode" value="7" />
 
     <!-- ground truth -->
+    <param name="ground_truth_flag" value="false" />
     <param name="route_name_ground_truth" value="$(arg route)" />
     <param name="route_radius_ground_truth" value="$(arg radius)" />
     <param name="truck_vel_ground_truth" value="4.17" />
@@ -58,7 +59,7 @@
     <param name="vehicle_lambda_D" value="10.0" />
     <param name="vehicle_estimate_odom_number" value="100" />
     <param name="vehicle_trajectory_generate_freqency" value="5" />
-    <param name="vehicle_visualization_predict_time" value="5.0" />
+    <param name="vehicle_visualization_predict_time" value="7.0" />
     <param name="vehicle_visualization_preview_time" value="2.0" />
     <param name="param_output_param" value="false" />
   </node>
@@ -71,9 +72,9 @@
       <param name="vehicle_traj_polynomial_order" value="10" />
       <param name="vehicle_traj_derivation_order" value="4" />
       <param name="vehicle_lambda_D" value="10.0" />
-      <param name="vehicle_estimate_odom_number" value="100" />
+      <param name="vehicle_estimate_odom_number" value="80" />
       <param name="vehicle_trajectory_generate_freqency" value="5" />
-      <param name="vehicle_visualization_predict_time" value="5.0" />
+      <param name="vehicle_visualization_predict_time" value="7.0" />
       <param name="vehicle_visualization_preview_time" value="2.0" />
       <param name="param_output_param" value="false" />
     </node>
@@ -88,9 +89,9 @@
       <param name="vehicle_traj_polynomial_order" value="10" />
       <param name="vehicle_traj_derivation_order" value="4" />
       <param name="vehicle_lambda_D" value="10.0" />
-      <param name="vehicle_estimate_odom_number" value="100" />
+      <param name="vehicle_estimate_odom_number" value="80" />
       <param name="vehicle_trajectory_generate_freqency" value="5" />
-      <param name="vehicle_visualization_predict_time" value="5.0" />
+      <param name="vehicle_visualization_predict_time" value="7.0" />
       <param name="vehicle_visualization_preview_time" value="2.0" />
       <param name="param_output_param" value="false" />
     </node>
