@@ -25,7 +25,7 @@ public:
   virtual ~TruckOctomapServer();
   float m_step_value;
   ros::Publisher m_pub_lane_marker;
-  std::string m_route_name;
+  int m_route_id;
   float m_route_radius;
   std::string m_truck_odom_sub_topic_name;
 

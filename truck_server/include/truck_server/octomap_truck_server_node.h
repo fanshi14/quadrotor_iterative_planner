@@ -94,6 +94,8 @@ public:
 
   int m_car_inner_type;
   int m_car_outter_type;
+  /* 1 is circle track, 2 has bridge, 3 has crossing car, 4 has bridge and crossing car */
+  int m_route_id;
 
   VehicleTrajectoryBase m_truck_traj_base;
   VehicleTrajectoryBase m_car_inner_traj_base;
@@ -138,6 +140,7 @@ public:
   void carInnerOdomCallback(const nav_msgs::OdometryConstPtr& msg);
   void carOutterOdomCallback(const nav_msgs::OdometryConstPtr& msg);
   void vehicleCurrentPosVisualization(int vehicle_type);
+  void obstacleCurrentPosVisualization(int obstacle_type);
 
   void onInit();
   void aStarSearchGraphInit();
@@ -177,6 +180,7 @@ void TruckServerNode::onInit()
 
   private_nh.param("resolution", m_octomap_res, 0.1);
   private_nh.param("tree_depth", m_octomap_tree_depth, 16);
+  private_nh.param("route_id", m_route_id, 1);
   private_nh.param("has_car_inner", m_has_car_inner, true);
   private_nh.param("has_car_outter", m_has_car_outter, true);
   private_nh.param("vehilce_inner_type", m_car_inner_type, 1);
@@ -432,6 +436,20 @@ void TruckServerNode::updateObstacleOctomap(TruckOctomapServer* obstacle_ptr, do
     car_outter_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, t0 + m_segment_period_time);
     obstacle_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(car_outter_pos.x(), car_outter_pos.y(), 0.0f, 0.0, 0.0, atan2(car_outter_vel.y(), car_outter_vel.x())));
   }
+
+
+  /* 1 is circle track, 2 has bridge, 3 has crossing car, 4 has bridge and crossing car */
+  switch (m_route_id){
+  case 2:
+    obstacle_ptr->WriteObstacleOctree(0, Pose6D(0.0f, -30.0f, 0.0f, 0.0, 0.0, 0.0));
+    break;
+  case 3:
+    break;
+  case 4:
+    break;
+  default:
+    break;
+  }
 }
 
 Vector3d TruckServerNode::nOrderVehicleTrajectoryFromGroundTruth(int order, double t0)
@@ -520,6 +538,19 @@ void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
   }
 }
 
+void TruckServerNode::obstacleCurrentPosVisualization(int obstacle_type)
+{
+  /* 0 is truck */
+  switch (obstacle_type){
+  case 0:
+    m_truck_ptr->WriteObstacleOctree(obstacle_type, Pose6D(0.0f, -30.0f, 0.0f, 0.0, 0.0, 0.0));
+    break;
+  case 2:
+    break;
+  default:
+    break;
+  }
+}
 
 void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
@@ -1137,6 +1168,18 @@ void TruckServerNode::truckOdomCallback(const nav_msgs::OdometryConstPtr& msg)
       vehicleCurrentPosVisualization(1); // 1 is small car
     if (m_has_car_outter)
       vehicleCurrentPosVisualization(2); // 2 is big car
+    /* 1 is circle track, 2 has bridge, 3 has crossing car, 4 has bridge and crossing car */
+    switch (m_route_id){
+    case 2:
+      obstacleCurrentPosVisualization(0); // truck
+      break;
+    case 3:
+      break;
+    case 4:
+      break;
+    default:
+      break;
+    }
     m_truck_ptr->publishTruckAll(ros::Time().now());
     m_truck_ptr->m_octree->clear();
   }

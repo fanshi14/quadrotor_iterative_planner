@@ -1,6 +1,7 @@
 <launch>
   <arg name="has_uav" default="true"/>
-  <arg name="route" default="circle"/>
+  <!-- 1 is circle track, 2 has bridge, 3 has crossing car, 4 has bridge and crossing car -->
+  <arg name="route_id" default="2"/>
   <arg name="radius" default="30.0"/>
   <arg name="has_car_outter" default="true"/>
   <arg name="has_car_inner" default="true"/>
@@ -8,6 +9,7 @@
   <arg name="empty_world" default="true"/>
 
   <node pkg="truck_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
+    <param name="route_id" value="$(arg route_id)" />
     <param name="resolution" value="0.2" />
     <param name="tree_depth" value="10" />
     <param name="frame_id" type="string" value="world" />
@@ -20,14 +22,12 @@
 
     <!-- ground truth -->
     <param name="ground_truth_flag" value="false" />
-    <param name="route_name_ground_truth" value="$(arg route)" />
     <param name="route_radius_ground_truth" value="$(arg radius)" />
     <param name="truck_vel_ground_truth" value="4.17" />
     <param name="car_outter_vel_ground_truth" value="4.865" />
     <param name="car_inner_vel_ground_truth" value="3.475" />
 
     <!-- track or circle -->
-    <param name="route_name" value="$(arg route)" />
     <param name="route_radius" value="$(arg radius)" />
     <param name="truck_odom_sub_topic_name" value="/truck_odom" />
     <param name="octomap_update_rate" value="50" />
@@ -39,7 +39,7 @@
   <node pkg="truck_server" type="sim_cars_poses_pub.py" name="sim_cars_poses_pub" output="screen">
     <param name="has_car_inner" value="$(arg has_car_inner)" />
     <param name="has_car_outter" value="$(arg has_car_outter)" />
-    <param name="route_name" value="$(arg route)" />
+    <param name="route_id" value="$(arg route_id)" />
     <param name="route_radius" value="$(arg radius)" />
     <param name="truck_vel" value="4.17" />
     <param name="car_outter_vel" value="4.865" />
