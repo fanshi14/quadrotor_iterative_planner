@@ -412,9 +412,9 @@ void TruckOctomapServer::laneMarkerVisualization()
   lane_strip_marker.scale.y = 0.2;
   lane_strip_marker.scale.z = 0.2;
   lane_strip_marker.color.a = 1.0;
-  lane_strip_marker.color.r = 1.0f;
-  lane_strip_marker.color.g = 1.0f;
-  lane_strip_marker.color.b = 1.0f;
+  lane_strip_marker.color.r = 0.1f;
+  lane_strip_marker.color.g = 0.1f;
+  lane_strip_marker.color.b = 0.1f;
   for (uint32_t i = 0; i < 4; ++i){
     // Create the vertices for the points and lines
     //double radius = m_route_radius + i * 3.5 - 5.25;
@@ -454,9 +454,9 @@ void TruckOctomapServer::crossLaneMarkerVisualization()
   lane_strip_marker.scale.y = 0.2;
   lane_strip_marker.scale.z = 0.2;
   lane_strip_marker.color.a = 1.0;
-  lane_strip_marker.color.r = 1.0f;
-  lane_strip_marker.color.g = 1.0f;
-  lane_strip_marker.color.b = 1.0f;
+  lane_strip_marker.color.r = 0.1f;
+  lane_strip_marker.color.g = 0.1f;
+  lane_strip_marker.color.b = 0.1f;
 
 
   geometry_msgs::Point p;
