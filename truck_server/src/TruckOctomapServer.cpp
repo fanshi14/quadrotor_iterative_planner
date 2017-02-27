@@ -418,16 +418,14 @@ void TruckOctomapServer::laneMarkerVisualization()
     // Create the vertices for the points and lines
     //double radius = m_route_radius + i * 3.5 - 5.25;
     double radius = m_route_radius + i * 5 - 7.5;
-    if (m_route_id == 1){
-      for (int j = 0; j <= 360; ++j){
-        geometry_msgs::Point p;
-        p.x = radius * sin(j/180.0*3.14);
-        p.y = -radius * cos(j/180.0*3.14);
-        p.z = 0;
+    for (int j = 0; j <= 360; ++j){
+      geometry_msgs::Point p;
+      p.x = radius * sin(j/180.0*3.14);
+      p.y = -radius * cos(j/180.0*3.14);
+      p.z = 0;
 
-        // The line list needs two points for each line
-        lane_strip_marker.points.push_back(p);
-      }
+      // The line list needs two points for each line
+      lane_strip_marker.points.push_back(p);
     }
   }
   m_pub_lane_marker.publish(lane_strip_marker);
