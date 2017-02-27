@@ -1,7 +1,8 @@
 
 #include <truck_server/QuadrotorCommand.h>
 
-QuadrotorCommand::QuadrotorCommand()
+QuadrotorCommand::QuadrotorCommand() {}
+void QuadrotorCommand::onInit()
 {
   ros::NodeHandle private_nh("~");
   private_nh.param("gazebo_mode", m_gazebo_mode, true);
@@ -30,9 +31,9 @@ QuadrotorCommand::QuadrotorCommand()
   /* state: 0, still; 1, taking off; 2, ready to move; 3, landing finishes */
   m_uav_state = 0;
 
-  m_pub_uav_cmd = m_nh.advertise<geometry_msgs::Twist>(m_uav_cmd_pub_topic_name, 1);
-  m_sub_truck_odom = m_nh.subscribe<nav_msgs::Odometry>(m_truck_odom_sub_topic_name, 1, &QuadrotorCommand::truckOdomCallback, this);
-  m_sub_uav_odom = m_nh.subscribe<nav_msgs::Odometry>(m_uav_odom_sub_topic_name, 1, &QuadrotorCommand::uavOdomCallback, this);
+  // m_pub_uav_cmd = m_nh.advertise<geometry_msgs::Twist>(m_uav_cmd_pub_topic_name, 1);
+  // m_sub_truck_odom = m_nh.subscribe<nav_msgs::Odometry>(m_truck_odom_sub_topic_name, 1, &QuadrotorCommand::truckOdomCallback, this);
+  // m_sub_uav_odom = m_nh.subscribe<nav_msgs::Odometry>(m_uav_odom_sub_topic_name, 1, &QuadrotorCommand::uavOdomCallback, this);
   sleep(0.2); //To collect initial values for truck and uav odom, which will be used in following functions
 
 

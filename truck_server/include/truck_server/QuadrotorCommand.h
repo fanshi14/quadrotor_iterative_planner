@@ -79,6 +79,7 @@ public:
   // Publisher
   ros::Publisher m_pub_uav_cmd;
 
+  void onInit();
   void truckOdomCallback(const nav_msgs::OdometryConstPtr& truck_odom_msg);
   void uavOdomCallback(const nav_msgs::OdometryConstPtr& uav_odom_msg);
   inline double uavTruckHorizonDistance();

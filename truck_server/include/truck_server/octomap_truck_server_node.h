@@ -1,3 +1,6 @@
+#ifndef OCTOMAP_TRUCK_SERVER_NODE_H_
+#define OCTOMAP_TRUCK_SERVER_NODE_H_
+
 #include <ros/ros.h>
 #include <truck_server/TruckOctomapServer.h>
 #include <unistd.h>
@@ -16,7 +19,9 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <quadrotor_trajectory/VehicleTrajectoryBase.h>
-#include <bspline_ros/bsplineGenerate.h>
+#include <truck_server/QuadrotorCommand.h>
+// Already defined in truck_server/QuadrotorCommand.h
+// #include <bspline_ros/bsplineGenerate.h>
 
 using namespace octomap_server;
 using namespace vehicle_trajectory_base;
@@ -125,7 +130,11 @@ public:
   std::vector<Vector3d> m_control_point_vec;
   double m_uav_default_upbound_vel;
 
+  /* uav */
   nav_msgs::Odometry m_uav_odom;
+  QuadrotorCommand m_uav;
+  ros::Subscriber sub_uav_start_flag_;
+  void uavStartFlagCallback(const std_msgs::Empty msg);
 
   /* Ground truth */
   double m_route_radius_gt;
@@ -229,6 +238,9 @@ void TruckServerNode::onInit()
 
   aStarSearchGraphInit();
 
+  /* uav */
+  m_uav.onInit();
+
   /* Subscriber */
   sub_point_occupied_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_occupied", 10, &TruckServerNode::pointOccupiedQueryCallback, this);
   sub_lane_marker_flag_ = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
@@ -241,6 +253,7 @@ void TruckServerNode::onInit()
   sub_car_inner_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_inner_odom", 1, &TruckServerNode::carInnerOdomCallback, this);
   sub_car_outter_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_outter_odom", 1, &TruckServerNode::carOutterOdomCallback, this);
   sub_car_cross_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_cross_odom", 1, &TruckServerNode::carCrossOdomCallback, this);
+  sub_uav_start_flag_ = nh_.subscribe<std_msgs::Empty>("/uav_start_flag", 1, &TruckServerNode::uavStartFlagCallback, this);
 
   /* Publisher */
   pub_point_octocube_ = nh_.advertise<visualization_msgs::Marker>("octo_cube_marker", 1);
@@ -1262,3 +1275,10 @@ void TruckServerNode::aStarSearchGraphInit()
       }
 
 }
+
+void TruckServerNode::uavStartFlagCallback(const std_msgs::Empty msg)
+{
+  //m_uav.uavMovingToPresetHeight(6.0);
+}
+
+#endif
