@@ -25,6 +25,7 @@ public:
   virtual ~TruckOctomapServer();
   float m_step_value;
   ros::Publisher m_pub_lane_marker;
+  ros::Publisher m_pub_cross_lane_marker;
   int m_route_id;
   float m_route_radius;
   std::string m_truck_odom_sub_topic_name;
@@ -36,6 +37,7 @@ public:
   void publishTruckFullOctoMap(const ros::Time& rostime);
   void publishTruckAll(const ros::Time& rostime);
   void laneMarkerVisualization();
+  void crossLaneMarkerVisualization();
 };
 
 #endif

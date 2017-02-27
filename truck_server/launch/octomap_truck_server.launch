@@ -1,10 +1,10 @@
 <launch>
   <arg name="has_uav" default="true"/>
   <!-- 1 is circle track, 2 has bridge, 3 has crossing car, 4 has bridge and crossing car -->
-  <arg name="route_id" default="2"/>
+  <arg name="route_id" default="4"/>
   <arg name="radius" default="30.0"/>
   <arg name="has_car_outter" default="true"/>
-  <arg name="has_car_inner" default="true"/>
+  <arg name="has_car_inner" default="false"/>
   <arg name="spline_degree" default="2"/>
   <arg name="empty_world" default="true"/>
 
@@ -34,6 +34,7 @@
     <param name="vehicle_octomap_visualize_mode" value="1" />
     <param name="vehicle_inner_type" value="1" />
     <param name="vehicle_outter_type" value="2" />
+    <param name="vehicle_cross_type" value="2" />
   </node>
 
   <node pkg="truck_server" type="sim_cars_poses_pub.py" name="sim_cars_poses_pub" output="screen">
@@ -44,6 +45,7 @@
     <param name="truck_vel" value="4.17" />
     <param name="car_outter_vel" value="4.865" />
     <param name="car_inner_vel" value="3.475" />
+    <param name="car_cross_vel" value="2.0" />
   </node>
 
   <!-- generate global bspline path message -->
@@ -96,6 +98,21 @@
       <param name="param_output_param" value="false" />
     </node>
   </group>
+
+  <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="car_cross_traj" output="screen">
+    <param name="vehicle_type" value="2" />
+    <param name="vehicle_odom_sub_topic_name" value="/car_cross_odom" />
+    <param name="vehicle_traj_param_pub_topic_name" value="/car_cross_traj_param" />
+    <param name="vehicle_traj_path_pub_topic_name" value="/car_cross_path" />
+    <param name="vehicle_traj_polynomial_order" value="10" />
+    <param name="vehicle_traj_derivation_order" value="4" />
+    <param name="vehicle_lambda_D" value="10.0" />
+    <param name="vehicle_estimate_odom_number" value="80" />
+    <param name="vehicle_trajectory_generate_freqency" value="5" />
+    <param name="vehicle_visualization_predict_time" value="7.0" />
+    <param name="vehicle_visualization_preview_time" value="2.0" />
+    <param name="param_output_param" value="false" />
+  </node>
 
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(find truck_server)/config/truck_octomap.rviz" />
   <node pkg="truck_server" type="lane_marker_flag.py" name="lane_marker_flag" />

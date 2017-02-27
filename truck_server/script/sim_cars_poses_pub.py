@@ -12,17 +12,19 @@ def talker():
     rospy.init_node('sim_cars_poses_pub', anonymous=True)
     has_car_inner = rospy.get_param("~has_car_inner", False)
     has_car_outter = rospy.get_param("~has_car_outter", False)
-    route_id = rospy.get_param("~route_id", "circle")
+    route_id = rospy.get_param("~route_id", 1)
     route_radius = rospy.get_param("~route_radius", 20.0)
     truck_vel = rospy.get_param("~truck_vel", 4.17)
     car_inner_vel = rospy.get_param("~car_inner_vel", 4.17)
     car_outter_vel = rospy.get_param("~car_outter_vel", 4.17)
+    car_cross_vel = rospy.get_param("~car_cross_vel", 2.5)
     lane_width = rospy.get_param("~lane_width", 5)
 
     cars_poses_pub = rospy.Publisher('/cars_poses', PoseArray, queue_size=1)
     truck_odom_pub = rospy.Publisher('/truck_odom', Odometry, queue_size=1)
     car_inner_odom_pub = rospy.Publisher('/car_inner_odom', Odometry, queue_size=1)
     car_outter_odom_pub = rospy.Publisher('/car_outter_odom', Odometry, queue_size=1)
+    car_cross_odom_pub = rospy.Publisher('/car_cross_odom', Odometry, queue_size=1)
 
     car_inner_radius = route_radius - lane_width
     car_outter_radius = route_radius + lane_width
@@ -33,6 +35,7 @@ def talker():
     car_inner_ang_vel = car_inner_vel / car_inner_radius
     car_outter_ang_vel = car_outter_vel / car_outter_radius
     truck_ang_vel = truck_vel / truck_radius
+    truck_period_time = 2 * 3.1416 / truck_ang_vel
     cnt = 0
     rate = rospy.Rate(50)
     while not rospy.is_shutdown():
@@ -40,6 +43,8 @@ def talker():
         truck_odom = car_inner_odom = car_outter_odom = Odometry()
         poses.header.frame_id = truck_odom.header.frame_id = car_inner_odom.header.frame_id = car_outter_odom.header.frame_id = "world"
         poses.header.stamp = truck_odom.header.stamp = car_inner_odom.header.stamp = car_outter_odom.header.stamp = rospy.Time.now()
+        car_cross_odom = Odometry()
+        car_cross_odom.header = truck_odom.header
 
         ## truck
         cur_pose = Pose()
@@ -83,6 +88,22 @@ def talker():
             temp_twist.linear.y = car_outter_vel * math.sin(car_outter_ang)
             truck_odom.twist.twist = temp_twist
             car_outter_odom_pub.publish(car_outter_odom)
+
+        ## car cross
+        if route_id == 3 or route_id == 4:
+            truck_ang = truck_ang_vel * cnt * 0.02
+            temp_pose = Pose()
+            if (int(truck_ang*100)) % 628 < 314:
+                temp_pose.position.x = car_cross_vel * (cnt * 0.02 - (int(truck_ang*100)) / 628 * truck_period_time)
+                temp_pose.position.y = 0.0
+                temp_pose.orientation.w = 0
+                poses.poses.append(temp_pose)
+                temp_twist = Twist()
+                temp_twist.linear.x = car_cross_vel
+                temp_twist.linear.y = 0.0
+                car_cross_odom.twist.twist = temp_twist
+            car_cross_odom.pose.pose = temp_pose
+            car_cross_odom_pub.publish(car_cross_odom)
 
         cars_poses_pub.publish(poses)
         cnt += 1

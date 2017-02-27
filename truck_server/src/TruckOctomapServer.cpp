@@ -41,6 +41,7 @@ void TruckOctomapServer::init_param()
   m_octree->enableChangeDetection(true);
 
   m_pub_lane_marker = this->m_nh.advertise<visualization_msgs::Marker>("lane_marker", 10);
+  m_pub_cross_lane_marker = this->m_nh.advertise<visualization_msgs::Marker>("lane_cross_marker", 10);
 
   printf("Layers: %d %d\n", m_octree->tree_depth, (int)m_octree->tree_size);
 }
@@ -429,4 +430,51 @@ void TruckOctomapServer::laneMarkerVisualization()
     }
   }
   m_pub_lane_marker.publish(lane_strip_marker);
+}
+
+void TruckOctomapServer::crossLaneMarkerVisualization()
+{
+  visualization_msgs::Marker lane_strip_marker;
+  lane_strip_marker.ns = "lanes";
+  lane_strip_marker.header.frame_id = std::string("/world");
+  lane_strip_marker.header.stamp = ros::Time().now();
+  lane_strip_marker.action = visualization_msgs::Marker::ADD;
+  lane_strip_marker.id = 0;
+  lane_strip_marker.type = visualization_msgs::Marker::LINE_STRIP;
+
+  lane_strip_marker.pose.position.x = 0.0;
+  lane_strip_marker.pose.position.y = 0.0;
+  lane_strip_marker.pose.position.z = 0.0;
+
+  lane_strip_marker.pose.orientation.x = 0.0;
+  lane_strip_marker.pose.orientation.y = 0.0;
+  lane_strip_marker.pose.orientation.z = 0.0;
+  lane_strip_marker.pose.orientation.w = 1.0;
+  lane_strip_marker.scale.x = 0.2;
+  lane_strip_marker.scale.y = 0.2;
+  lane_strip_marker.scale.z = 0.2;
+  lane_strip_marker.color.a = 1.0;
+  lane_strip_marker.color.r = 1.0f;
+  lane_strip_marker.color.g = 1.0f;
+  lane_strip_marker.color.b = 1.0f;
+
+
+  geometry_msgs::Point p;
+  p.x = 60;
+  p.y = 2.0;
+  p.z = 0;
+  lane_strip_marker.points.push_back(p);
+  p.x = -5;
+  p.y = 2.0;
+  p.z = 0;
+  lane_strip_marker.points.push_back(p);
+  p.x = -5;
+  p.y = -2.0;
+  p.z = 0;
+  lane_strip_marker.points.push_back(p);
+  p.x = 60;
+  p.y = -2.0;
+  p.z = 0;
+  lane_strip_marker.points.push_back(p);
+  m_pub_cross_lane_marker.publish(lane_strip_marker);
 }
