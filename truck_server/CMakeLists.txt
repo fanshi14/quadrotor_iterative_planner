@@ -60,7 +60,7 @@ set(LINK_LIBS
   ${BSPLINE_ROS_LIBRARIES}
 )
 
-add_library(${PROJECT_NAME} src/TruckOctomapServer.cpp)
+add_library(${PROJECT_NAME} src/TruckOctomapServer.cpp src/QuadrotorCommand.cpp)
 target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
 add_executable(octomap_truck_server_node src/octomap_truck_server_node.cpp)
