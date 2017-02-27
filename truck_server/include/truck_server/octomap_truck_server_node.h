@@ -23,13 +23,17 @@ using namespace vehicle_trajectory_base;
 
 struct aStarDataType
 {
-  point3d pos;
+  Vector3d pos;
   double g_val;
   double h_val;
   double f_val;
-  int ang_id;
+  int planned_bias_id;
+  int planned_bias_cnt;
+  int time_id;
+  int vel_z_id;
   int id;
   int prev_id;
+  int prev2_id;
 };
 struct aStarComparator {
   bool operator()(aStarDataType i, aStarDataType j) {
@@ -57,9 +61,9 @@ public:
   ros::Publisher pub_reconstructed_path_markers_;
   ros::Publisher pub_control_points_;
 
-  std::vector<aStarDataType> open_set_vec_, close_set_vec_, data_set_vec_;
-  int data_set_num_;
-  std::vector<point3d> astar_path_vec_;
+  std::vector<aStarDataType> m_open_set_vec, m_close_set_vec, m_data_set_vec;
+  int m_data_set_num;
+  std::vector<point3d> m_astar_path_vec;
   point3d m_init_point, m_land_point;
   float spline_res;
 
@@ -108,11 +112,26 @@ public:
   std::vector<TruckOctomapServer*> m_object_seg_ptr_vec;
   int m_n_segments;
   double m_landing_time;
+  double m_tracking_time;
   double m_target_height;
   double m_default_landing_vel;
   double m_segment_period_time;
   std::vector<Vector3d> m_control_point_vec;
   double m_uav_default_upbound_vel;
+  Vector3d m_control_pt_n_1;
+  Vector3d m_control_pt_n;
+  std::vector<aStarDataType> m_searched_path_vec;
+
+  Vector3d m_planned_moving_bias;
+  double m_planned_tracking_time;
+
+  /* Ground truth */
+  double m_route_radius_gt;
+  double m_truck_vel_gt;
+  double m_car_outter_vel_gt;
+  double m_car_inner_vel_gt;
+  Vector3d nOrderVehicleTrajectoryGroundTruth(int order, double t0);
+  bool m_ground_truth_flag;
 
   nav_msgs::Odometry m_uav_odom;
 
@@ -154,9 +173,12 @@ public:
   // iterative search
   void runIterativeSearching();
   void initIterativeSearching();
-  void onIterativeSearching();
+  bool onIterativeSearching();
   void updateObstacleOctomap(TruckOctomapServer* obstacle_ptr, double t0);
+  void updateObstacleOctomapFromGroundTruth(TruckOctomapServer* obstacle_ptr, double t0);
   void controlPolygonDisplay(int mode);
+  double pointHeuristicValueEstimate(Vector3d uav_pose, double landing_vel);
+  inline double distanceBetweenVectors(Vector3d vec1, Vector3d vec2);
 };
 
 void TruckServerNode::onInit()
@@ -179,6 +201,12 @@ void TruckServerNode::onInit()
   private_nh.param("target_height", m_target_height, 0.8);
   private_nh.param("uav_default_upbound_vel", m_uav_default_upbound_vel, 5.0);
   private_nh.param("spline_path_pub_topic_name", m_spline_path_pub_topic_name, (std::string)"spline_path");
+
+  private_nh.param("ground_truth_flag", m_ground_truth_flag, true);
+  private_nh.param("route_radius_ground_truth", m_route_radius_gt, 30.0);
+  private_nh.param("truck_vel_ground_truth", m_truck_vel_gt, 4.17);
+  private_nh.param("car_outter_ground_truth", m_car_outter_vel_gt, 4.17);
+  private_nh.param("car_inner_ground_truth", m_car_inner_vel_gt, 4.17);
 
   m_bspline_generator.onInit(m_spline_degree, true, m_spline_path_pub_topic_name);
 
@@ -230,93 +258,171 @@ void TruckServerNode::initIterativeSearching()
     m_object_seg_ptr_vec[i]->m_octree->clear();
   m_object_seg_ptr_vec.clear();
 
-  /* Initialize segment estimated landing time, which could be dynamically adjusted when meeting obstacles */
-  double landing_time_z = (m_uav_odom.pose.pose.position.z - m_target_height) / 1.0;
-  // if current z speed is nearly 0, then we assume there is an acceleration to 1 m/s taking 1 second
-  if (m_uav_odom.twist.twist.linear.z < 0.1)
-    landing_time_z += 1.0;
-  double truck_vel = sqrt(pow(m_truck_odom.twist.twist.linear.x, 2) +pow(m_truck_odom.twist.twist.linear.y, 2));
-  double landing_time_xy = sqrt(pow(m_uav_odom.pose.pose.position.x-m_truck_odom.pose.pose.position.x, 2) + pow(m_uav_odom.pose.pose.position.y-m_truck_odom.pose.pose.position.y, 2)) / (m_uav_default_upbound_vel - truck_vel);
-  // if result is 5.1 s, we will use 6.0s as the landing time
-  if (landing_time_z > landing_time_xy)
-    m_landing_time = (int)(landing_time_z + 0.99);
-  else
-    m_landing_time = (int)(landing_time_xy + 0.99);
-
-  /* Initialize segment default period time, which is 1.0s */
-  m_segment_period_time = 1.0;
-
   Vector3d control_pt_0(m_uav_odom.pose.pose.position.x, m_uav_odom.pose.pose.position.y, m_uav_odom.pose.pose.position.z);
   m_control_point_vec.push_back(control_pt_0);
   // Set second control point: P1 = P0 + v * Tp / 2
   while(1){
     TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
-    updateObstacleOctomap(obstacle_ptr, 0);
+    if (m_ground_truth_flag)
+      updateObstacleOctomapGroundTruth(obstacle_ptr, 0);
+    else
+      updateObstacleOctomap(obstacle_ptr, 0);
     Vector3d control_pt_1 = control_pt_0 +
       Vector3d(m_uav_odom.twist.twist.linear.x*m_segment_period_time/2.0,
                m_uav_odom.twist.twist.linear.y*m_segment_period_time/2.0,
                m_uav_odom.twist.twist.linear.z*m_segment_period_time/2.0);
-    Vector3d temp_3d;
     // todo: collision detection
     m_object_seg_ptr_vec.push_back(obstacle_ptr);
+    /* time id starts from 1, so we add a depulate ptr to its 0 index */
+    m_object_seg_ptr_vec.push_back(obstacle_ptr);
     m_control_point_vec.push_back(control_pt_1);
-    /* if we have 2 segments on z axis, we have 3 segments in total (because of first and last point and its neighbor control points generating based on velocity constraits) */
-    m_landing_time += m_segment_period_time;
-    m_n_segments = int(m_landing_time / m_segment_period_time);
+    m_segment_period_time = 1.0;
     break;
-
-    // if (getGridCenter(obstacle_ptr, control_pt_1, temp_3d, -1)){
-    //   m_object_seg_ptr_vec.push_back(obstacle_ptr);
-    //   m_control_point_vec.push_back(control_pt_1);
-    //   /* if we have 2 segments on z axis, we have 3 segments in total (because of first and last point and its neighbor control points generating based on velocity constraits) */
-    //   m_landing_time += m_segment_period_time;
-    //   m_n_segments = int(m_landing_time / m_segment_period_time);
-    //   break;
-    // }
-    // else{
-    //   ROS_WARN("Control points 1 could not use!! Decrease initial gap to its 1/2.");
-    //   m_segment_period_time /= 2.0;
-    //   obstacle_ptr->m_octree->clear();
-    // }
-    // todo: check land point's forhead control point to decide segment_period_time
   }
+  /* Initialize A star algorithm */
+  double truck_vel = sqrt(pow(m_truck_odom.twist.twist.linear.x, 2) +pow(m_truck_odom.twist.twist.linear.y, 2));
+  double landing_time_xy = sqrt(pow(m_uav_odom.pose.pose.position.x-m_truck_odom.pose.pose.position.x, 2) + pow(m_uav_odom.pose.pose.position.y-m_truck_odom.pose.pose.position.y, 2)) / (m_uav_default_upbound_vel - truck_vel);
+  if (m_planned_tracking_time < 1)
+    m_planned_tracking_time = 1;
+  else
+    m_planned_tracking_time = (int)(landing_time_xy + 0.99);
+  m_planned_moving_bias = (Vector3d(m_uav_odom.pose.pose.position.x,
+                                    m_uav_odom.pose.pose.position.y,
+                                    m_uav_odom.pose.pose.position.z)
+                           - Vector3d(m_truck_odom.pose.pose.position.x,
+                                      m_truck_odom.pose.pose.position.y,
+                                      m_truck_odom.pose.pose.position.z))
+    / m_planned_tracking_time;
+
+  /* Initialize A star basic data */
+  aStarDataType control_pt_0_data;
+  control_pt_0_data.pos = control_pt_0;
+  control_pt_0_data.g_val = 0.0;
+  control_pt_0_data.h_val = pointHeuristicValueEstimate(control_pt_0, 1.0);
+  control_pt_0_data.f_val = control_pt_0_data.h_val;
+  control_pt_0_data.time_id = 0;
+  control_pt_0_data.id = m_data_set_num;
+  control_pt_0_data.prev_id = -1;
+  control_pt_0_data.prev2_id = -2;
+  m_data_set_vec.push_back(control_pt_0_data);
+  ++m_data_set_num;
+  aStarDataType control_pt_1_data;
+  control_pt_1_data.pos = control_pt_1;
+  control_pt_1_data.time_id = 0;
+  control_pt_1_data.vel_z_id = (int)(control_pt_1[2] - control_pt_0[2] + 0.5);
+  control_pt_1_data.g_val = distanceBetweenVectors(control_pt_0, control_pt_1);
+  control_pt_1_data.h_val = pointHeuristicValueEstimate(control_pt_1, control_pt_1_data.vel_z_id);
+  control_pt_1_data.f_val = control_pt_1_data.h_val + control_pt_1_data.g_val;
+  control_pt_1_data.id = m_data_set_num;
+  control_pt_1_data.prev_id = 0;
+  control_pt_1_data.prev2_id = -1;
+  m_data_set_vec.push_back(control_pt_1_data);
+  ++m_data_set_num;
+
+  for (int i = -2; i <= 2; ++i){
+    if (abs(control_pt_1_data.vel_z_id + i) >= 4)
+      continue;
+    aStarDataType control_pt_data;
+    Vector3d control_pt;
+    control_pt_data.planned_bias_cnt = m_planned_tracking_time;
+    control_pt_data.planned_bias_id = m_planned_tracking_time-1;
+    control_pt_data.time_id = 1;
+    control_pt_data.vel_z_id = control_pt_1_data.vel_z_id + i;
+    control_pt_data.prev_id = 1;
+    control_pt_data.prev2_id = 0;
+    if (m_ground_truth_flag)
+      control_pt_data.pos = m_planned_moving_bias*control_pt_data.planned_bias_id
+        + nOrderVehicleTrajectoryGroundTruth(0, control_pt_data.time_id)
+        + Vector3d(0, 0, m_data_set_vec[control_pt_data.prev2_id].pos[2] + control_pt_data.vel_z_id);
+    else
+      control_pt_data.pos = m_planned_moving_bias*control_pt_data.planned_bias_id
+        + m_truck_traj_base.nOrderVehicleTrajectory(0, control_pt_data.time_id)
+        + Vector3d(0, 0, m_data_set_vec[control_pt_data.prev2_id].pos[2] + control_pt_data.vel_z_id);
+    Vector3d temp_3d;
+    /* Detect whether this grid is occupied */
+    if (getGridCenter(m_object_seg_ptr_vec[control_pt_data.time_id], control_pt_data.pos, temp_3d, -1))
+      continue;
+    // todo: punish vel_z changes?
+    control_pt_data.g_val = control_pt_1_data.g_val + distanceBetweenVectors(control_pt, control_pt_1);
+    control_pt_data.h_val = pointHeuristicValueEstimate(control_pt, control_pt_data.vel_z_id);
+    control_pt_data.f_val = control_pt_data.h_val + control_pt_data.g_val;
+    control_pt_data.id = m_data_set_num;
+    m_data_set_vec.push_back(control_pt_data);
+    ++m_data_set_num;
+    m_open_set_vec.push_back(control_pt_data);
+  }
+
+
 }
 
-void TruckServerNode::onIterativeSearching()
+bool TruckServerNode::onIterativeSearching()
 {
-
-  /* Simple generate control points, ignoring obstacles avoidance */
-  Vector3d target_cur_pt(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, m_target_height);
-  for (int i = 1; i <= m_n_segments-1; ++i){
-    Vector3d cur_control_pt = (m_control_point_vec[0] - target_cur_pt) / (m_n_segments-1) * (m_n_segments-1-i) + m_truck_traj_base.nOrderVehicleTrajectory(0, i*m_segment_period_time) + Vector3d(0.0, 0.0, m_target_height);
-    m_control_point_vec.push_back(cur_control_pt);
-  }
-
-  /* Set second control point: Pn-1 = Pn - v * Tp / 2 */
-  /* Simple add last 2 control points without collision checking */
-  // todo: check last 2 control points
-  while(1){
-    TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
-    updateObstacleOctomap(obstacle_ptr, m_landing_time-m_segment_period_time);
-    Vector3d control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, m_target_height);
-    // todo: adding landing speed. Currently z-axis value is 0 in last triangle.
-    Vector3d control_pt_n_1 = control_pt_n -
-      m_truck_traj_base.nOrderVehicleTrajectory(1, m_landing_time) * m_segment_period_time/2.0;
-
-    Vector3d temp_3d;
-    /* Check control points whether is safe */
-    // todo: stretegy when it happens
-    if (getGridCenter(obstacle_ptr, control_pt_n, temp_3d, -1)){
-      ROS_ERROR("Landing point is in collision!!!");
+  while (true){
+    if (m_open_set_ve.size() <= 0){
+      ROS_WARN("Open set is empty. Failed!");
+      return false;
     }
-    /* Check landing point's neighbor control point being safe */
-    // todo: strategy when this point is in collision
-    if (!getGridCenter(obstacle_ptr, control_pt_n_1, temp_3d, -1)){
-      ROS_WARN("Control points n-1 could not use!! TODO work.");
+    int min_index = 0;
+    double min_val = 10000000;
+    for (int i = 0; i < m_open_set_ve.size(); ++i){
+      if (m_open_set_vec[i].f_val < min_val){
+        index = i;
+        min_val = m_open_set_vec[i].f_val;
+      }
     }
-    m_control_point_vec.push_back(control_pt_n_1);
-    m_control_point_vec.push_back(control_pt_n);
-    break;
+    /* If z distance to target is less than 2m, it is possible to land */
+    if (m_open_set_vec[min_index].pos[2] - m_target_height <= 2*m_segment_period_time){
+      // todo: check last 2 control points
+      Vector3d control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_open_set_vec[min_index].time_id + m_segment_period_time) + Vector3d(0.0, 0.0, m_target_height);
+      // todo: adding landing speed. Currently z-axis value is 0 in last triangle.
+      Vector3d control_pt_n_1 = control_pt_n -
+        m_truck_traj_base.nOrderVehicleTrajectory(1, m_open_set_vec[min_index].time_id + m_segment_period_time) * m_segment_period_time/2.0;
+      /* If distance to target is less than 5m, it is possible to land */
+      if (distanceBetweenVectors(m_open_set_vec[min_index], control_pt_n_1) < 5*m_segment_period_time){
+        ROS_INFO("Find A star solution.");
+        aStarDataType control_pt_n_data; control_pt_n_1_data.pos = control_pt_n;
+        aStarDataType control_pt_n_1_data; control_pt_n_1_data.pos = control_pt_n_1;
+        m_searched_path_vec.push_back(control_pt_n_data);
+        m_searched_path_vec.push_back(control_pt_n_1_data);
+        m_searched_path_vec.push_back(m_open_set_vec[min_index]);
+        return true;
+      }
+    }
+
+    /* Add new node to open set, based on selected point and its previous point */
+    aStarDataType control_pt_i_data = m_data_set_vec[m_open_set_vec[min_index].prev_id];
+    aStarDataType control_pt_i_1_data = m_open_set_vec[min_index];
+    for (int i = -2; i <= 2; ++i){
+      if (abs(control_pt_i_1_data.vel_z_id + i) >= 4)
+        continue;
+      aStarDataType control_pt_data;
+      Vector3d control_pt;
+      control_pt_data.planned_bias_cnt = m_planned_tracking_time;
+      if (control_pt_i_1_data.planned_bias_id == 0)
+        control_pt_data.planned_bias_id = 0;
+      else
+        control_pt_data.planned_bias_id = control_pt_i_1_data.planned_bias_id-1;
+      control_pt_data.time_id = m_segment_period_time;
+      control_pt_data.vel_z_id = control_pt_1_data.vel_z_id + i;
+      control_pt_data.prev_id = control_pt_1_data.id;
+      control_pt_data.prev2_id = control_pt_1_data.prev_id;
+      control_pt_data.pos = m_planned_moving_bias*control_pt_data.planned_bias_id
+        + m_truck_traj_base.nOrderVehicleTrajectory(0, control_pt_data.time_id)
+        + Vector3d(0, 0, m_data_set_vec[control_pt_data.prev2_id].pos[2] + control_pt_data.vel_z_id);
+      Vector3d temp_3d;
+      /* Detect whether this grid is occupied */
+      if (m_object_seg_ptr_vec.size()-1 < control_pt_data.time_id)
+        if (getGridCenter(m_object_seg_ptr_vec[m_segment_period_time*control_pt_data.time_id], control_pt_data.pos, temp_3d, -1))
+        continue;
+      // todo: punish vel_z changes?
+      control_pt_data.g_val = control_pt_i_1_data.g_val + distanceBetweenVectors(control_pt, control_pt_i_1);
+      control_pt_data.h_val = pointHeuristicValueEstimate(control_pt, control_pt_data.vel_z_id);
+      control_pt_data.f_val = control_pt_data.h_val + control_pt_data.g_val;
+      control_pt_data.id = m_data_set_num;
+      m_data_set_vec.push_back(control_pt_data);
+      ++m_data_set_num;
+      m_open_set_vec.push_back(control_pt_data);
+    }
   }
 }
 
@@ -388,6 +494,50 @@ void TruckServerNode::updateObstacleOctomap(TruckOctomapServer* obstacle_ptr, do
   if (m_has_car_outter){
     Vector3d car_outter_pos = m_car_outter_traj_base.nOrderVehicleTrajectory(0, t0);
     Vector3d car_outter_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, t0);
+    obstacle_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(car_outter_pos.x(), car_outter_pos.y(), 0.0f, 0.0, 0.0, atan2(car_outter_vel.y(), car_outter_vel.x())));
+    car_outter_pos = m_car_outter_traj_base.nOrderVehicleTrajectory(0, t0 + m_segment_period_time);
+    car_outter_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, t0 + m_segment_period_time);
+    obstacle_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(car_outter_pos.x(), car_outter_pos.y(), 0.0f, 0.0, 0.0, atan2(car_outter_vel.y(), car_outter_vel.x())));
+  }
+}
+
+
+Vector3d TruckServerNode::nOrderVehicleTrajectoryGroundTruth(int order, double t0)
+{
+  double ang = atan2(m_truck_odom.pose.pose.position.x, -m_truck_odom.pose.pose.position.y);
+  double r = m_route_radius_gt;
+  double ang_vel = m_truck_vel_gt / r;
+  if (order == 0){
+    Vector3d truck_pos = Vector3d(r*sin(ang + ang_vel*t0), -r*cos(ang + ang_vel*t0), 0);
+    return truck_pos;
+  }
+  else{
+    Vector3d truck_vel = Vector3d(m_truck_vel_gt*cos(ang + ang_vel*t0), m_truck_vel_gt*sin(ang + ang_vel*t0), 0);
+    return truck_vel;
+  }
+}
+
+void TruckServerNode::updateObstacleOctomapFromGroundTruth(TruckOctomapServer* obstacle_ptr, double t0)
+{
+  // Add inner car
+  if (m_has_car_inner){
+    double ang = atan2(m_car_inner_odom.pose.pose.position.x, -m_car_inner_odom.pose.pose.position.y);
+    double r = m_route_radius_gt - 5;
+    double ang_vel = m_car_inner_vel_gt / r;
+    Vector3d car_inner_pos = Vector3d(r*sin(ang + ang_vel*t0), -r*cos(ang + ang_vel*t0), 0);
+    Vector3d car_inner_vel = Vector3d(m_car_inner_vel_gt*cos(ang + ang_vel*t0), m_car_inner_vel_gt*sin(ang + ang_vel*t0), 0);
+    obstacle_ptr->WriteVehicleOctree(m_car_inner_type, Pose6D(car_inner_pos.x(), car_inner_pos.y(), 0.0f, 0.0, 0.0, atan2(car_inner_vel.y(), car_inner_vel.x())));
+    car_inner_pos = m_car_inner_traj_base.nOrderVehicleTrajectory(0, t0 + m_segment_period_time);
+    car_inner_vel = m_car_inner_traj_base.nOrderVehicleTrajectory(1, t0 + m_segment_period_time);
+    obstacle_ptr->WriteVehicleOctree(m_car_inner_type, Pose6D(car_inner_pos.x(), car_inner_pos.y(), 0.0f, 0.0, 0.0, atan2(car_inner_vel.y(), car_inner_vel.x())));
+  }
+    // Add outter car
+  if (m_has_car_outter){
+    double ang = atan2(m_car_outter_odom.pose.pose.position.x, -m_car_outter_odom.pose.pose.position.y);
+    double r = m_route_radius_gt + 5;
+    double ang_vel = m_car_outter_vel_gt / r;
+    Vector3d car_outter_pos = Vector3d(r*sin(ang + ang_vel*t0), -r*cos(ang + ang_vel*t0), 0);
+    Vector3d car_outter_vel = Vector3d(m_car_outter_vel_gt*cos(ang + ang_vel*t0), m_car_outter_vel_gt*sin(ang + ang_vel*t0), 0);
     obstacle_ptr->WriteVehicleOctree(m_car_outter_type, Pose6D(car_outter_pos.x(), car_outter_pos.y(), 0.0f, 0.0, 0.0, atan2(car_outter_vel.y(), car_outter_vel.x())));
     car_outter_pos = m_car_outter_traj_base.nOrderVehicleTrajectory(0, t0 + m_segment_period_time);
     car_outter_vel = m_car_outter_traj_base.nOrderVehicleTrajectory(1, t0 + m_segment_period_time);
@@ -769,11 +919,11 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 
 // bool TruckServerNode::aStarSearchInit()
 // {
-//   data_set_num_ = 0;
-//   data_set_vec_.clear();
-//   open_set_vec_.clear();
-//   close_set_vec_.clear();
-//   astar_path_vec_.clear();
+//   m_data_set_num = 0;
+//   m_data_set_vec.clear();
+//   m_open_set_vec.clear();
+//   m_close_set_vec.clear();
+//   m_astar_path_vec.clear();
 
 //   point3d start_point;
 //   if (!getGridCenter(m_init_point, start_point, -1)){
@@ -796,7 +946,7 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 //       for (int k = 0; k < 6;++k){
 //         aStarDataType new_astar_node;
 //         new_astar_node.prev_id = -1;
-//         new_astar_node.id = data_set_num_;
+//         new_astar_node.id = m_data_set_num;
 //         /* k is 0xabc, means x axis is a (0:up, 1:down), y axis is b, z axis is c. */
 //         new_astar_node.ang_id = k;
 //         new_astar_node.pos = neighbor_center_point;
@@ -814,11 +964,11 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 //         //    + fabs(neighbor_center_point.y()-m_land_point.y())
 //         //    + fabs(neighbor_center_point.z()-m_land_point.z()));
 //         new_astar_node.f_val = new_astar_node.g_val + new_astar_node.h_val;
-//         open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
-//         data_set_vec_.push_back(new_astar_node);
-//         ++data_set_num_;
+//         m_open_set_vec.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
+//         m_data_set_vec.push_back(new_astar_node);
+//         ++m_data_set_num;
 //         //test
-//         //astar_path_vec_.push_back(neighbor_center_point);
+//         //m_astar_path_vec.push_back(neighbor_center_point);
 //       }
 //     }
 //   }
@@ -839,11 +989,11 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 //     return false;
 //   }
 
-//   while (!open_set_vec_.empty())
+//   while (!m_open_set_vec.empty())
 //     {
-//       //std::cout << "open set size: " << open_set_vec_.size() << '\n';
+//       //std::cout << "open set size: " << m_open_set_vec.size() << '\n';
 //       // Pop first element in open set, and push into close set
-//       aStarDataType start_astar_node = open_set_vec_[0];
+//       aStarDataType start_astar_node = m_open_set_vec[0];
 //       point3d start_point = start_astar_node.pos;
 //       // Judge whether reach the goal point
 //       // TODO: better end conditions is needed
@@ -853,8 +1003,8 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 //           reconstructPath(start_astar_node.id);
 //           return true;
 //         }
-//       close_set_vec_.insert(getPosItearator(start_astar_node.f_val, 'c'), start_astar_node);
-//       open_set_vec_.erase(open_set_vec_.begin());
+//       m_close_set_vec.insert(getPosItearator(start_astar_node.f_val, 'c'), start_astar_node);
+//       m_open_set_vec.erase(m_open_set_vec.begin());
 
 //       int start_octree_node_depth;
 //       m_truck_ptr->m_octree->searchReturnDepth(start_point, 0, start_octree_node_depth);
@@ -882,14 +1032,14 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 //             }
 //             else{
 //               aStarDataType end_point_node;
-//               end_point_node.id = data_set_num_;
+//               end_point_node.id = m_data_set_num;
 //               end_point_node.prev_id = start_astar_node.id;
 //               end_point_node.pos = neighbor_center_point;
 //               end_point_node.g_val = start_astar_node.g_val + start_point.distance(neighbor_center_point);
 //               end_point_node.h_val = 0;
 //               end_point_node.f_val = end_point_node.g_val;
-//               data_set_vec_.push_back(end_point_node);
-//               ++data_set_num_;
+//               m_data_set_vec.push_back(end_point_node);
+//               ++m_data_set_num;
 //               reconstructPath(end_point_node.id);
 //             }
 //             return true;
@@ -919,10 +1069,10 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 //               continue;
 //             if (!nodeInOpenSet(new_astar_node))
 //               {
-//                 new_astar_node.id = data_set_num_;
-//                 open_set_vec_.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
-//                 data_set_vec_.push_back(new_astar_node);
-//                 ++data_set_num_;
+//                 new_astar_node.id = m_data_set_num;
+//                 m_open_set_vec.insert(getPosItearator(new_astar_node.f_val, 'o'), new_astar_node);
+//                 m_data_set_vec.push_back(new_astar_node);
+//                 ++m_data_set_num;
 //               }
 //           }
 //         }
@@ -935,27 +1085,27 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 // void TruckServerNode::reconstructPath(int end_id)
 // {
 //   // From end to start
-//   astar_path_vec_.push_back(m_land_point);
+//   m_astar_path_vec.push_back(m_land_point);
 //   while(end_id != -1){
-//     astar_path_vec_.push_back(data_set_vec_[end_id].pos);
-//     end_id = data_set_vec_[end_id].prev_id;
+//     m_astar_path_vec.push_back(m_data_set_vec[end_id].pos);
+//     end_id = m_data_set_vec[end_id].prev_id;
 //   }
-//   astar_path_vec_.push_back(m_init_point);
+//   m_astar_path_vec.push_back(m_init_point);
 // }
 
 // std::vector<aStarDataType>::iterator TruckServerNode::getPosItearator(double f_val, char ch)
 // {
 //   if (ch == 'o'){
-//     std::vector<aStarDataType>::iterator it = open_set_vec_.begin();
-//     while (it != open_set_vec_.end()){
+//     std::vector<aStarDataType>::iterator it = m_open_set_vec.begin();
+//     while (it != m_open_set_vec.end()){
 //       if (f_val > it->f_val) ++it;
 //       else break;
 //     }
 //     return it;
 //   }
 //   else if (ch == 'c'){
-//     std::vector<aStarDataType>::iterator it = close_set_vec_.begin();
-//     while (it != close_set_vec_.end()){
+//     std::vector<aStarDataType>::iterator it = m_close_set_vec.begin();
+//     while (it != m_close_set_vec.end()){
 //       if (f_val > it->f_val) ++it;
 //       else break;
 //     }
@@ -965,16 +1115,16 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 
 // bool TruckServerNode::nodeInCloseSet(aStarDataType& node)
 // {
-//   std::vector<aStarDataType>::iterator it = close_set_vec_.begin();
+//   std::vector<aStarDataType>::iterator it = m_close_set_vec.begin();
 //   std::vector<aStarDataType>::iterator it_pos;
-//   while (it != close_set_vec_.end()){
+//   while (it != m_close_set_vec.end()){
 //     if (node.pos == it->pos){
 //       // If node in close set could be updated, move from close set to open set suitable position.
 //       if (node.f_val < it->f_val){
 //         node.id = it->id;
-//         data_set_vec_[node.id] = node;
-//         close_set_vec_.erase(it);
-//         open_set_vec_.insert(getPosItearator(node.f_val, 'o'), node);
+//         m_data_set_vec[node.id] = node;
+//         m_close_set_vec.erase(it);
+//         m_open_set_vec.insert(getPosItearator(node.f_val, 'o'), node);
 //       }
 //       return true;
 //     }
@@ -985,16 +1135,16 @@ bool TruckServerNode::getGridCenter(point3d query_point, point3d& center_point, 
 
 // bool TruckServerNode::nodeInOpenSet(aStarDataType& node)
 // {
-//   std::vector<aStarDataType>::iterator it = open_set_vec_.begin();
-//   while (it != open_set_vec_.end()){
+//   std::vector<aStarDataType>::iterator it = m_open_set_vec.begin();
+//   while (it != m_open_set_vec.end()){
 //     if (node.pos == it->pos){
 //       // if node in open set could be updated
 //       if (node.f_val < it->f_val){
 //         // Because f_val decreased, judge whether node's position in open set should be moved.
 //         node.id = it->id;
-//         data_set_vec_[node.id] = node;
-//         open_set_vec_.erase(it);
-//         open_set_vec_.insert(getPosItearator(node.f_val, 'o'), node);
+//         m_data_set_vec[node.id] = node;
+//         m_open_set_vec.erase(it);
+//         m_open_set_vec.insert(getPosItearator(node.f_val, 'o'), node);
 //       }
 //       return true;
 //     }
@@ -1082,4 +1232,20 @@ void TruckServerNode::aStarSearchGraphInit()
         m_seach_graph_connected_map.push_back(Vector3d(2*i-1, 2*j-1, 2*k-1));
       }
 
+}
+
+double TruckServerNode::pointHeuristicValueEstimate(Vector3d uav_pose, double landing_vel)
+{
+  double landing_time = (uav_pose[2] - m_target_height) / landing_vel;
+  double distance = distanceBetweenVectors(m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time),
+                                    Vector3d(m_uav_odom.pose.pose.position.x,
+                                             m_uav_odom.pose.pose.position.y, 0));
+}
+
+inline double TruckServerNode::distanceBetweenVectors(Vector3d vec1, Vector3d vec2)
+{
+  double distance_pow = 0.0;
+  for (int i = 0; i < 3; ++i)
+    distance_pow += pow(vec1[i]-vec2[i], 2);
+  return sqrt(distance_pow);
 }

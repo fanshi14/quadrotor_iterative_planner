@@ -18,6 +18,13 @@
     <!-- 7 is planar connected, 19 is including line connected, 27 is including verticle connected -->
     <param name="graph_connected_mode" value="7" />
 
+    <!-- ground truth -->
+    <param name="route_name_ground_truth" value="$(arg route)" />
+    <param name="route_radius_ground_truth" value="$(arg radius)" />
+    <param name="truck_vel_ground_truth" value="4.17" />
+    <param name="car_outter_vel_ground_truth" value="4.865" />
+    <param name="car_inner_vel_ground_truth" value="3.475" />
+
     <!-- track or circle -->
     <param name="route_name" value="$(arg route)" />
     <param name="route_radius" value="$(arg radius)" />
