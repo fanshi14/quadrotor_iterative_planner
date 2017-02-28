@@ -216,7 +216,7 @@ void TruckServerNode::onInit()
   private_nh.param("vehicles_visualize_period_time", m_vehicles_visualize_period_time, 0.5);
   private_nh.param("global_planning_period_time", m_global_planning_period_time, 1.0);
   private_nh.param("target_height", m_target_height, 0.8);
-  private_nh.param("uav_default_upbound_vel", m_uav_default_upbound_vel, 5.0);
+  private_nh.param("uav_default_upbound_vel", m_uav_default_upbound_vel, 7.0);
   private_nh.param("spline_path_pub_topic_name", m_spline_path_pub_topic_name, (std::string)"spline_path");
 
   /*Ground truth */
@@ -304,8 +304,13 @@ void TruckServerNode::initIterativeSearching()
   // if result is 5.1 s, we will use 6.0s as the landing time
   if (landing_time_z > landing_time_xy)
     m_landing_time = (int)(landing_time_z + 0.99);
-  else
-    m_landing_time = (int)(landing_time_xy + 0.99);
+  else{
+    /* if xy distance is too large, estimate will be bad, no need to directly lead to final position */
+    if (landing_time_xy < 5.0)
+      m_landing_time = (int)(landing_time_xy + 0.99);
+    else
+      m_landing_time = (int)(landing_time_z + 0.99);
+  }
 
   /* Initialize segment default period time, which is 1.0s */
   m_segment_period_time = 1.0;
@@ -406,7 +411,7 @@ void TruckServerNode::runIterativeSearching()
 {
   // test
   /* uav odom cheat mode */
-  uavRandomCheatOdom();
+  // uavRandomCheatOdom();
 
   initIterativeSearching();
   onIterativeSearching();
@@ -418,10 +423,10 @@ void TruckServerNode::runIterativeSearching()
   controlPolygonDisplay(1);
 
   /* Print the value of control points */
-  for (int i = 0; i < m_control_point_vec.size(); ++i){
-    std::cout << "[Control pt] " << i << ": " << m_control_point_vec[i].x() << ", "
-              << m_control_point_vec[i].y() << ", " << m_control_point_vec[i].z() << "\n";
-  }
+  // for (int i = 0; i < m_control_point_vec.size(); ++i){
+  //   std::cout << "[Control pt] " << i << ": " << m_control_point_vec[i].x() << ", "
+  //             << m_control_point_vec[i].y() << ", " << m_control_point_vec[i].z() << "\n";
+  // }
 }
 
 void TruckServerNode::uavRandomCheatOdom()
@@ -627,7 +632,16 @@ void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayCo
       m_car_outter_traj_base.onInit(traj_order1, data1);
     }
     /* run Iterative Searching */
-    runIterativeSearching();
+    if (m_uav.m_uav_state == 3){
+      runIterativeSearching();
+
+      /* assign param to uav */
+      m_uav.m_bspline_traj_ptr = &m_bspline_generator;
+      m_uav.m_traj_updated = true;
+      m_uav.m_traj_first_updated = true;
+      m_uav.m_traj_updated_time = cur_time;
+      m_uav.m_truck_traj = m_truck_traj_base;
+    }
   }
 }
 
@@ -764,10 +778,11 @@ void TruckServerNode::controlPolygonDisplay(int mode){
       double knot_time = m_bspline_generator.m_knotpts[j];
       std::vector<double> knot_vel_vec = m_bspline_generator.evaluateDerive(knot_time);
       double knot_vel = sqrt(pow(knot_vel_vec[0],2) + pow(knot_vel_vec[1],2) + pow(knot_vel_vec[2],2));
-      if (knot_vel > 10.0)
-        ROS_ERROR("!!!!!!!!!!!!!!!!!!!! Knot vel is too large!!!!");
-      std::cout << "[Knot] " << j << ": " << knot_time << ", vel: " << knot_vel << "|| "
-                << knot_vel_vec[0] << ", "<< knot_vel_vec[1] << ", "<< knot_vel_vec[2] << "\n";
+      /* Debug output */
+      // if (knot_vel > 10.0)
+      //   ROS_ERROR("!!!!!!!!!!!!!!!!!!!! Knot vel is too large!!!!");
+      // std::cout << "[Knot] " << j << ": " << knot_time << ", vel: " << knot_vel << "|| "
+      //           << knot_vel_vec[0] << ", "<< knot_vel_vec[1] << ", "<< knot_vel_vec[2] << "\n";
     }
   }
 
@@ -1294,19 +1309,30 @@ void TruckServerNode::aStarSearchGraphInit()
 
 void TruckServerNode::uavStartFlagCallback(const std_msgs::Empty msg)
 {
-  while (!m_uav.uavMovingToPresetHeight(6.0)){
-    pub_uav_cmd_.publish(m_uav.m_uav_cmd);
-    sleep(0.1);
-  }
-  pub_uav_cmd_.publish(m_uav.m_uav_cmd);
-  sleep(0.1);
+  m_uav.m_uav_state = 1;
 }
 
 void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
+  m_uav_odom = *msg;
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, landing finishes */
   m_uav.getUavOdom(msg);
-  // if (m_uav.m_uav_state == 2)
-  //   pub_uav_cmd_.publish(m_uav.m_uav_cmd);
+  if (m_uav.m_uav_state == 1){
+    m_uav.uavMovingToPresetHeight(6.0);
+    pub_uav_cmd_.publish(m_uav.m_uav_cmd);
+  }
+  else if (m_uav.m_uav_state == 2){
+    if (m_uav.uavTruckHorizonDistance() < 4.0){
+      m_uav.m_uav_state = 3;
+    }
+  }
+  else if (m_uav.m_uav_state == 3){
+    /* In case traj not being calculated before state changes to 3 */
+    if (m_uav.m_traj_first_updated){
+      m_uav.trackTrajectory();
+      pub_uav_cmd_.publish(m_uav.m_uav_cmd);
+    }
+  }
 }
 
 #endif

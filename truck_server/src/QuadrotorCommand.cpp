@@ -21,11 +21,12 @@ void QuadrotorCommand::onInit()
   m_traj_track_i_term_accumulation.setValue(0.0, 0.0, 0.0);
   m_uav_yaw_i_term_accumulation = 0.0;
   m_traj_updated = false;
+  m_traj_first_updated = false;
 
   m_uav_cmd.linear.x = 0.0; m_uav_cmd.linear.y = 0.0; m_uav_cmd.linear.z = 0.0;
   m_uav_cmd.angular.x = 0.0; m_uav_cmd.angular.y = 0.0; m_uav_cmd.angular.z = 0.0;
 
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, landing finishes */
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, landing finishes */
   m_uav_state = 0;
 
   sleep(0.2); //To collect initial values for truck and uav odom, which will be used in following functions
@@ -56,13 +57,13 @@ void QuadrotorCommand::getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg
   m_uav_world_vel.setValue(uav_odom_msg->twist.twist.linear.x,
                            uav_odom_msg->twist.twist.linear.y,
                            uav_odom_msg->twist.twist.linear.z);
+}
 
-  // 2, ready to move
-  if (m_uav_state != 2)
-    return;
-
+void QuadrotorCommand::trackTrajectory()
+{
   // Control
   if (m_traj_updated){
+    m_traj_updated = false;
     m_bspline_traj_ptr->getDerive();
     // ??
     m_traj_track_i_term_accumulation.setValue(0.0, 0.0, 0.0);
@@ -101,6 +102,7 @@ void QuadrotorCommand::getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg
   m_uav_cmd.linear.x = uav_vel.getX();
   m_uav_cmd.linear.y = uav_vel.getY();
   m_uav_cmd.linear.z = uav_vel.getZ();
+  std::cout << "vel z: " << m_uav_cmd.linear.z << "\n";
 }
 
 bool QuadrotorCommand::uavMovingToPresetHeight(double height)
@@ -121,7 +123,7 @@ bool QuadrotorCommand::uavMovingToPresetHeight(double height)
   return false;
 }
 
-inline double QuadrotorCommand::uavTruckHorizonDistance()
+double QuadrotorCommand::uavTruckHorizonDistance()
 {
   return pow((m_uav_world_pos.getX()-m_truck_world_pos.getX()), 2) + pow((m_uav_world_pos.getY()-m_truck_world_pos.getY()), 2);
 }

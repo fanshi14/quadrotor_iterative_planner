@@ -46,7 +46,7 @@ public:
   tf::Vector3 m_uav_truck_world_pos;
   tf::Quaternion m_uav_q;
   nav_msgs::Odometry m_truck_odom;
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, landing finishes */
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, landing finishes */
   int m_uav_state;
   nav_msgs::Odometry m_uav_odom;
   geometry_msgs::Twist m_uav_cmd;
@@ -65,6 +65,7 @@ public:
   /* bspline generator */
   bsplineGenerate *m_bspline_traj_ptr;
   bool m_traj_updated;
+  bool m_traj_first_updated;
   double m_traj_updated_time;
   VehicleTrajectoryBase m_truck_traj;
 
@@ -73,7 +74,8 @@ public:
   void onInit();
   void getTruckOdom(const nav_msgs::OdometryConstPtr& truck_odom_msg);
   void getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg);
-  inline double uavTruckHorizonDistance();
+  void trackTrajectory();
+  double uavTruckHorizonDistance();
   void updateUavTruckRelPos();
   void trajectoryTracking(Vector3d uav_des_pos, Vector3d uav_des_vel);
   bool uavMovingToPresetHeight(double height);
