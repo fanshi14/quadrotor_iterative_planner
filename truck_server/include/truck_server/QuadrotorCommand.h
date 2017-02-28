@@ -39,6 +39,7 @@ public:
   double m_uav_vel_lb;
   double m_uav_acc_ub;
   double m_uav_acc_lb;
+  double m_target_height;
   tf::Vector3 m_uav_world_pos;
   tf::Vector3 m_uav_world_vel;
   tf::Vector3 m_uav_world_acc;

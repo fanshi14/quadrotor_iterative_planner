@@ -17,6 +17,7 @@ void QuadrotorCommand::onInit()
   private_nh.param("uav_cmd_traj_track_i_term_max", m_traj_track_i_term_max, 4.0);
   private_nh.param("uav_cmd_traj_track_d_term_max", m_traj_track_d_term_max, 0.0);
   private_nh.param("uav_odom_freq", m_uav_odom_freq, 50.0);
+  private_nh.param("target_height", m_target_height, 0.8);
 
   m_traj_track_i_term_accumulation.setValue(0.0, 0.0, 0.0);
   m_uav_yaw_i_term_accumulation = 0.0;
@@ -72,7 +73,7 @@ void QuadrotorCommand::trackTrajectory()
   double uav_current_traj_time = m_uav_odom.header.stamp.toSec() - m_traj_updated_time;
   tf::Vector3 uav_des_world_vel = vectorToVector3(m_bspline_traj_ptr->evaluateDerive(uav_current_traj_time));
   tf::Vector3 uav_des_world_pos = vectorToVector3(m_bspline_traj_ptr->evaluate(uav_current_traj_time));
-  tf::Vector3 truck_des_world_pos = vector3dToVector3(m_truck_traj.nOrderVehicleTrajectory(0, uav_current_traj_time));
+  tf::Vector3 truck_des_world_pos = vector3dToVector3(m_truck_traj.nOrderVehicleTrajectory(0, uav_current_traj_time) + Vector3d(0.0, 0.0, m_target_height));
   tf::Vector3 uav_des_truck_pos = uav_des_world_pos - truck_des_world_pos;
   tf::Vector3 uav_real_truck_pos;
   if (m_gazebo_mode)
@@ -102,7 +103,6 @@ void QuadrotorCommand::trackTrajectory()
   m_uav_cmd.linear.x = uav_vel.getX();
   m_uav_cmd.linear.y = uav_vel.getY();
   m_uav_cmd.linear.z = uav_vel.getZ();
-  std::cout << "vel z: " << m_uav_cmd.linear.z << "\n";
 }
 
 bool QuadrotorCommand::uavMovingToPresetHeight(double height)

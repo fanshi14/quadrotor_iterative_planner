@@ -4,7 +4,7 @@
   <arg name="route_id" default="4"/>
   <arg name="radius" default="30.0"/>
   <arg name="has_car_outter" default="true"/>
-  <arg name="has_car_inner" default="false"/>
+  <arg name="has_car_inner" default="true"/>
   <arg name="spline_degree" default="2"/>
   <arg name="empty_world" default="true"/>
   <arg name="gazebo" default="true"/>
@@ -37,6 +37,7 @@
     <param name="vehicle_inner_type" value="1" />
     <param name="vehicle_outter_type" value="2" />
     <param name="vehicle_cross_type" value="2" />
+    <param name="target_height" value="0.8" />
 
     <!-- quadrotor command -->
     <param name="uav_odom_sub_topic_name" type="string" value="/ground_truth/state" if="$(arg gazebo)" />

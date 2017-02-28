@@ -129,6 +129,7 @@ public:
   double m_segment_period_time;
   std::vector<Vector3d> m_control_point_vec;
   double m_uav_default_upbound_vel;
+  double m_uav_landing_time_xy_upbound;
 
   /* uav */
   nav_msgs::Odometry m_uav_odom;
@@ -217,6 +218,7 @@ void TruckServerNode::onInit()
   private_nh.param("global_planning_period_time", m_global_planning_period_time, 1.0);
   private_nh.param("target_height", m_target_height, 0.8);
   private_nh.param("uav_default_upbound_vel", m_uav_default_upbound_vel, 7.0);
+  private_nh.param("uav_landing_time_xy_upbound", m_uav_landing_time_xy_upbound, 5.0);
   private_nh.param("spline_path_pub_topic_name", m_spline_path_pub_topic_name, (std::string)"spline_path");
 
   /*Ground truth */
@@ -296,24 +298,25 @@ void TruckServerNode::initIterativeSearching()
 
   /* Initialize segment estimated landing time, which could be dynamically adjusted when meeting obstacles */
   double landing_time_z = (m_uav_odom.pose.pose.position.z - m_target_height) / 1.0;
-  // if current z speed is nearly 0, then we assume there is an acceleration to 1 m/s taking 1 second
-  if (m_uav_odom.twist.twist.linear.z < 0.1)
-    landing_time_z += 1.0;
+  /* if current z speed is nearly 0, then we assume there is an acceleration to 1 m/s taking 1 second */
+  // if (m_uav_odom.twist.twist.linear.z < 0.1)
+  //   landing_time_z += 1.0;
   double truck_vel = sqrt(pow(m_truck_odom.twist.twist.linear.x, 2) +pow(m_truck_odom.twist.twist.linear.y, 2));
   double landing_time_xy = sqrt(pow(m_uav_odom.pose.pose.position.x-m_truck_odom.pose.pose.position.x, 2) + pow(m_uav_odom.pose.pose.position.y-m_truck_odom.pose.pose.position.y, 2)) / (m_uav_default_upbound_vel - truck_vel);
   // if result is 5.1 s, we will use 6.0s as the landing time
   if (landing_time_z > landing_time_xy)
-    m_landing_time = (int)(landing_time_z + 0.99);
+    m_landing_time = landing_time_z;
   else{
     /* if xy distance is too large, estimate will be bad, no need to directly lead to final position */
-    if (landing_time_xy < 5.0)
-      m_landing_time = (int)(landing_time_xy + 0.99);
+    if (landing_time_xy < m_uav_landing_time_xy_upbound)
+      m_landing_time = landing_time_xy;
     else
-      m_landing_time = (int)(landing_time_z + 0.99);
+      m_landing_time = landing_time_z;
   }
+  m_n_segments = (int)(m_landing_time + 0.99);
 
   /* Initialize segment default period time, which is 1.0s */
-  m_segment_period_time = 1.0;
+  m_segment_period_time = m_landing_time / m_n_segments;
 
   Vector3d control_pt_0(m_uav_odom.pose.pose.position.x, m_uav_odom.pose.pose.position.y, m_uav_odom.pose.pose.position.z);
   m_control_point_vec.push_back(control_pt_0);
@@ -332,9 +335,6 @@ void TruckServerNode::initIterativeSearching()
     // todo: collision detection
     m_object_seg_ptr_vec.push_back(obstacle_ptr);
     m_control_point_vec.push_back(control_pt_1);
-    /* if we have 2 segments on z axis, we have 3 segments in total (because of first and last point and its neighbor control points generating based on velocity constraits) */
-    m_landing_time += m_segment_period_time;
-    m_n_segments = int(m_landing_time / m_segment_period_time);
     break;
 
     // if (getGridCenter(obstacle_ptr, control_pt_1, temp_3d, -1)){
@@ -356,7 +356,6 @@ void TruckServerNode::initIterativeSearching()
 
 void TruckServerNode::onIterativeSearching()
 {
-
   /* Simple generate control points, ignoring obstacles avoidance */
   Vector3d target_cur_pt(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, m_target_height);
   for (int i = 1; i <= m_n_segments-1; ++i){
