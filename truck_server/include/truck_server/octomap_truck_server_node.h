@@ -137,7 +137,7 @@ public:
   std::string m_uav_cmd_pub_topic_name;
   ros::Subscriber sub_uav_start_flag_;
   ros::Subscriber sub_uav_odom_;
-  ros::Publisher m_pub_uav_cmd;
+  ros::Publisher pub_uav_cmd_;
   void uavStartFlagCallback(const std_msgs::Empty msg);
   void uavOdomCallback(const nav_msgs::OdometryConstPtr& msg);
 
@@ -247,9 +247,6 @@ void TruckServerNode::onInit()
 
   aStarSearchGraphInit();
 
-  /* uav */
-  m_uav.onInit();
-
   /* Subscriber */
   sub_point_occupied_query_ = nh_.subscribe<geometry_msgs::Vector3>("/query_point_occupied", 10, &TruckServerNode::pointOccupiedQueryCallback, this);
   sub_lane_marker_flag_ = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
@@ -265,10 +262,16 @@ void TruckServerNode::onInit()
   sub_uav_start_flag_ = nh_.subscribe<std_msgs::Empty>("/uav_start_flag", 1, &TruckServerNode::uavStartFlagCallback, this);
   sub_uav_odom_ = nh_.subscribe<nav_msgs::Odometry>(m_uav_odom_sub_topic_name, 1, &TruckServerNode::uavOdomCallback, this);
 
+
   /* Publisher */
   pub_point_octocube_ = nh_.advertise<visualization_msgs::Marker>("octo_cube_marker", 1);
   pub_reconstructed_path_markers_ = nh_.advertise<visualization_msgs::MarkerArray>("reconstructed_path_markers", 1);
   pub_control_points_  = nh_.advertise<geometry_msgs::PolygonStamped>("path_gird_points", 1);
+  pub_uav_cmd_  = nh_.advertise<geometry_msgs::Twist>(m_uav_cmd_pub_topic_name, 1);
+
+
+  /* uav */
+  m_uav.onInit();
 
   std::cout << "onInit finished.\n";
   ROS_INFO("onInit");
@@ -1291,12 +1294,19 @@ void TruckServerNode::aStarSearchGraphInit()
 
 void TruckServerNode::uavStartFlagCallback(const std_msgs::Empty msg)
 {
-  m_uav.uavMovingToPresetHeight(6.0);
+  while (!m_uav.uavMovingToPresetHeight(6.0)){
+    pub_uav_cmd_.publish(m_uav.m_uav_cmd);
+    sleep(0.1);
+  }
+  pub_uav_cmd_.publish(m_uav.m_uav_cmd);
+  sleep(0.1);
 }
 
 void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
   m_uav.getUavOdom(msg);
+  // if (m_uav.m_uav_state == 2)
+  //   pub_uav_cmd_.publish(m_uav.m_uav_cmd);
 }
 
 #endif

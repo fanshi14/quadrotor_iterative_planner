@@ -6,7 +6,6 @@ void QuadrotorCommand::onInit()
 {
   ros::NodeHandle private_nh("~");
   private_nh.param("gazebo_mode", m_gazebo_mode, true);
-  private_nh.param("uav_cmd_pub_topic_name,", m_uav_cmd_pub_topic_name, (std::string)"/cmd_vel");
   private_nh.param("uav_vel_upper_bound", m_uav_vel_ub, 7.0);
   private_nh.param("uav_vel_lower_bound", m_uav_vel_lb, -7.0);
   private_nh.param("uav_acc_upper_bound", m_uav_acc_ub, 2.0);
@@ -29,9 +28,6 @@ void QuadrotorCommand::onInit()
   /* state: 0, still; 1, taking off; 2, ready to move; 3, landing finishes */
   m_uav_state = 0;
 
-  // m_pub_uav_cmd = m_nh.advertise<geometry_msgs::Twist>(m_uav_cmd_pub_topic_name, 1);
-  // m_sub_truck_odom = m_nh.subscribe<nav_msgs::Odometry>(m_truck_odom_sub_topic_name, 1, &QuadrotorCommand::truckOdomCallback, this);
-  // m_sub_uav_odom = m_nh.subscribe<nav_msgs::Odometry>(m_uav_odom_sub_topic_name, 1, &QuadrotorCommand::uavOdomCallback, this);
   sleep(0.2); //To collect initial values for truck and uav odom, which will be used in following functions
 
 
@@ -49,8 +45,6 @@ void QuadrotorCommand::getTruckOdom(const nav_msgs::OdometryConstPtr& truck_odom
 
 void QuadrotorCommand::getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg)
 {
-  if (m_uav_state == 0)
-    return;
   m_uav_odom = *uav_odom_msg;
   m_uav_world_pos.setValue(uav_odom_msg->pose.pose.position.x,
                            uav_odom_msg->pose.pose.position.y,
@@ -62,6 +56,10 @@ void QuadrotorCommand::getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg
   m_uav_world_vel.setValue(uav_odom_msg->twist.twist.linear.x,
                            uav_odom_msg->twist.twist.linear.y,
                            uav_odom_msg->twist.twist.linear.z);
+
+  // 2, ready to move
+  if (m_uav_state != 2)
+    return;
 
   // Control
   if (m_traj_updated){
@@ -103,30 +101,24 @@ void QuadrotorCommand::getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg
   m_uav_cmd.linear.x = uav_vel.getX();
   m_uav_cmd.linear.y = uav_vel.getY();
   m_uav_cmd.linear.z = uav_vel.getZ();
-  m_pub_uav_cmd.publish(m_uav_cmd);
 }
 
 bool QuadrotorCommand::uavMovingToPresetHeight(double height)
 {
   m_uav_state = 1;
-  while (1){
-    m_uav_cmd.linear.x = 0.0; m_uav_cmd.linear.y = 0.0; m_uav_cmd.linear.z = 0.0;
-    if (m_uav_world_pos.getZ() < height){
-      m_uav_cmd.linear.z = 1.0;
-      m_pub_uav_cmd.publish(m_uav_cmd);
-    }
-    else if (m_uav_world_pos.getZ() > height + 1){
-      m_uav_cmd.linear.z = -1.0;
-      m_pub_uav_cmd.publish(m_uav_cmd);
-    }
-    else{
-      m_uav_state = 2;
-      m_pub_uav_cmd.publish(m_uav_cmd);
-      sleep(0.1);
-      return true;
-    }
-    sleep(0.1);
+  m_uav_cmd.linear.x = 0.0; m_uav_cmd.linear.y = 0.0; m_uav_cmd.linear.z = 0.0;
+  if (m_uav_world_pos.getZ() < height){
+    m_uav_cmd.linear.z = 1.0;
   }
+  else if (m_uav_world_pos.getZ() > height + 1.0){
+    m_uav_cmd.linear.z = -1.0;
+  }
+  else{
+    m_uav_state = 2;
+    ROS_INFO("UAV reached specific height.");
+    return true;
+  }
+  return false;
 }
 
 inline double QuadrotorCommand::uavTruckHorizonDistance()

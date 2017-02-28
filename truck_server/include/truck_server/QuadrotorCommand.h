@@ -70,9 +70,6 @@ public:
 
   std::string m_uav_cmd_pub_topic_name;
 
-  // Publisher
-  ros::Publisher m_pub_uav_cmd;
-
   void onInit();
   void getTruckOdom(const nav_msgs::OdometryConstPtr& truck_odom_msg);
   void getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg);
