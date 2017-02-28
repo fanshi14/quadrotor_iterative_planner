@@ -20,18 +20,22 @@ set(PACKAGE_DEPENDENCIES
   bspline_ros
 )
 
-
+find_package(cmake_modules REQUIRED)
 find_package(catkin REQUIRED COMPONENTS ${PACKAGE_DEPENDENCIES})
+find_package(Boost REQUIRED COMPONENTS system)
+find_package(Eigen REQUIRED)
 
 find_package(PCL REQUIRED QUIET COMPONENTS common sample_consensus io segmentation filters)
 
 find_package(octomap REQUIRED)
 add_definitions(-DOCTOMAP_NODEBUGOUT)
+add_definitions(${EIGEN_DEFINITIONS})
 
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${Eigen_INCLUDE_DIRS}
   ${OCTOMAP_INCLUDE_DIRS}
   ${QUADROTOR_TRAJECTORY_INCLUDE_DIRS}
   ${BSPLINE_ROS_INCLUDE_DIRS}
@@ -58,6 +62,7 @@ set(LINK_LIBS
   ${PCL_LIBRARIES}
   ${QUADROTOR_TRAJECTORY_LIBRARIES}
   ${BSPLINE_ROS_LIBRARIES}
+  #DEPENDS Eigen
 )
 
 add_library(${PROJECT_NAME} src/TruckOctomapServer.cpp src/QuadrotorCommand.cpp)

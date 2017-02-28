@@ -6,9 +6,7 @@ void QuadrotorCommand::onInit()
 {
   ros::NodeHandle private_nh("~");
   private_nh.param("gazebo_mode", m_gazebo_mode, true);
-  private_nh.param("truck_odom_sub_topic_name", m_truck_odom_sub_topic_name, (std::string)"/truck_odom");
-  private_nh.param("uav_odom_sub_topic_name", m_uav_odom_sub_topic_name, (std::string)"/ground_truth/state");
-  private_nh.param("uav_cmd_pub_topic_name", m_uav_cmd_pub_topic_name, (std::string)"/cmd_vel");
+  private_nh.param("uav_cmd_pub_topic_name,", m_uav_cmd_pub_topic_name, (std::string)"/cmd_vel");
   private_nh.param("uav_vel_upper_bound", m_uav_vel_ub, 7.0);
   private_nh.param("uav_vel_lower_bound", m_uav_vel_lb, -7.0);
   private_nh.param("uav_acc_upper_bound", m_uav_acc_ub, 2.0);
@@ -41,7 +39,7 @@ void QuadrotorCommand::onInit()
 
 QuadrotorCommand::~QuadrotorCommand() {}
 
-void QuadrotorCommand::truckOdomCallback(const nav_msgs::OdometryConstPtr& truck_odom_msg)
+void QuadrotorCommand::getTruckOdom(const nav_msgs::OdometryConstPtr& truck_odom_msg)
 {
   m_truck_odom = *truck_odom_msg;
   m_truck_world_pos.setValue(truck_odom_msg->pose.pose.position.x,
@@ -49,8 +47,10 @@ void QuadrotorCommand::truckOdomCallback(const nav_msgs::OdometryConstPtr& truck
                              truck_odom_msg->pose.pose.position.z);
 }
 
-void QuadrotorCommand::uavOdomCallback(const nav_msgs::OdometryConstPtr& uav_odom_msg)
+void QuadrotorCommand::getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg)
 {
+  if (m_uav_state == 0)
+    return;
   m_uav_odom = *uav_odom_msg;
   m_uav_world_pos.setValue(uav_odom_msg->pose.pose.position.x,
                            uav_odom_msg->pose.pose.position.y,

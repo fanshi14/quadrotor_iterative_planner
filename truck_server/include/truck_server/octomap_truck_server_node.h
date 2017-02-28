@@ -133,8 +133,13 @@ public:
   /* uav */
   nav_msgs::Odometry m_uav_odom;
   QuadrotorCommand m_uav;
+  std::string m_uav_odom_sub_topic_name;
+  std::string m_uav_cmd_pub_topic_name;
   ros::Subscriber sub_uav_start_flag_;
+  ros::Subscriber sub_uav_odom_;
+  ros::Publisher m_pub_uav_cmd;
   void uavStartFlagCallback(const std_msgs::Empty msg);
+  void uavOdomCallback(const nav_msgs::OdometryConstPtr& msg);
 
   /* Ground truth */
   double m_route_radius_gt;
@@ -221,6 +226,10 @@ void TruckServerNode::onInit()
   private_nh.param("car_outter_ground_truth", m_car_outter_vel_gt, 4.17);
   private_nh.param("car_inner_ground_truth", m_car_inner_vel_gt, 4.17);
 
+  /* uav */
+  private_nh.param("uav_odom_sub_topic_name", m_uav_odom_sub_topic_name, (std::string)"/ground_truth/state");
+  private_nh.param("uav_cmd_pub_topic_name", m_uav_cmd_pub_topic_name, (std::string)"/cmd_vel");
+
   m_bspline_generator.onInit(m_spline_degree, true, m_spline_path_pub_topic_name);
 
   /* 0 is only visualize vehicles current position, 1 is visualize their future position with connected octomap. */
@@ -254,6 +263,7 @@ void TruckServerNode::onInit()
   sub_car_outter_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_outter_odom", 1, &TruckServerNode::carOutterOdomCallback, this);
   sub_car_cross_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_cross_odom", 1, &TruckServerNode::carCrossOdomCallback, this);
   sub_uav_start_flag_ = nh_.subscribe<std_msgs::Empty>("/uav_start_flag", 1, &TruckServerNode::uavStartFlagCallback, this);
+  sub_uav_odom_ = nh_.subscribe<nav_msgs::Odometry>(m_uav_odom_sub_topic_name, 1, &TruckServerNode::uavOdomCallback, this);
 
   /* Publisher */
   pub_point_octocube_ = nh_.advertise<visualization_msgs::Marker>("octo_cube_marker", 1);
@@ -1196,6 +1206,9 @@ inline void TruckServerNode::vector3dConvertToPoint(Vector3d point3, geometry_ms
 
 void TruckServerNode::truckOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
+  /* uav */
+  m_uav.getTruckOdom(msg);
+
   m_truck_odom = *msg;
   double cur_time = ros::Time().now().toSec();
   if (cur_time - m_vehicles_visualize_prev_time > m_vehicles_visualize_period_time){
@@ -1278,7 +1291,12 @@ void TruckServerNode::aStarSearchGraphInit()
 
 void TruckServerNode::uavStartFlagCallback(const std_msgs::Empty msg)
 {
-  //m_uav.uavMovingToPresetHeight(6.0);
+  m_uav.uavMovingToPresetHeight(6.0);
+}
+
+void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
+{
+  m_uav.getUavOdom(msg);
 }
 
 #endif

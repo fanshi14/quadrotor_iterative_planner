@@ -12,10 +12,10 @@
 /* linear algebra */
 #include <math.h>
 #include <eigen3/Eigen/Core>
-#include <eigen3/Eigen/Dense>
-#include <eigen3/Eigen/LU>
-#include <eigen3/Eigen/Geometry>
-#include <eigen3/Eigen/Eigenvalues>
+// #include <eigen3/Eigen/Dense>
+// #include <eigen3/Eigen/LU>
+// #include <eigen3/Eigen/Geometry>
+// #include <eigen3/Eigen/Eigenvalues>
 #include <tf/transform_broadcaster.h>
 
 /* local class */
@@ -68,20 +68,14 @@ public:
   double m_traj_updated_time;
   VehicleTrajectoryBase m_truck_traj;
 
-  std::string m_truck_odom_sub_topic_name;
-  std::string m_uav_odom_sub_topic_name;
   std::string m_uav_cmd_pub_topic_name;
-
-  // Subscriber
-  ros::Subscriber m_sub_truck_odom;
-  ros::Subscriber m_sub_uav_odom;
 
   // Publisher
   ros::Publisher m_pub_uav_cmd;
 
   void onInit();
-  void truckOdomCallback(const nav_msgs::OdometryConstPtr& truck_odom_msg);
-  void uavOdomCallback(const nav_msgs::OdometryConstPtr& uav_odom_msg);
+  void getTruckOdom(const nav_msgs::OdometryConstPtr& truck_odom_msg);
+  void getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg);
   inline double uavTruckHorizonDistance();
   void updateUavTruckRelPos();
   void trajectoryTracking(Vector3d uav_des_pos, Vector3d uav_des_vel);
