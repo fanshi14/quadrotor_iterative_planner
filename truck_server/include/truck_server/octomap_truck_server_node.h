@@ -82,6 +82,7 @@ public:
   double m_octomap_res;
   int m_octomap_tree_depth;
   double m_octomap_boarder_val;
+  std::string m_truck_odom_sub_topic_name;
 
   double m_ara_star_rate;
   int m_graph_connected_mode;
@@ -219,6 +220,7 @@ void TruckServerNode::onInit()
   private_nh.param("target_height", m_target_height, 0.8);
   private_nh.param("uav_default_upbound_vel", m_uav_default_upbound_vel, 7.0);
   private_nh.param("uav_landing_time_xy_upbound", m_uav_landing_time_xy_upbound, 5.0);
+  private_nh.param("truck_odom_sub_topic_name", m_truck_odom_sub_topic_name, (std::string)"/truck_odom");
   private_nh.param("spline_path_pub_topic_name", m_spline_path_pub_topic_name, (std::string)"spline_path");
 
   /*Ground truth */
@@ -257,7 +259,7 @@ void TruckServerNode::onInit()
   sub_car_inner_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/car_inner_traj_param", 1, &TruckServerNode::carInnerTrajParamCallback, this);
   sub_car_outter_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/car_outter_traj_param", 1, &TruckServerNode::carOutterTrajParamCallback, this);
   sub_car_cross_traj_param_ = nh_.subscribe<std_msgs::Float64MultiArray>("/car_cross_traj_param", 1, &TruckServerNode::carCrossTrajParamCallback, this);
-  sub_truck_odom_ = nh_.subscribe<nav_msgs::Odometry>("/truck_odom", 1, &TruckServerNode::truckOdomCallback, this);
+  sub_truck_odom_ = nh_.subscribe<nav_msgs::Odometry>(m_truck_odom_sub_topic_name, 1, &TruckServerNode::truckOdomCallback, this);
   sub_car_inner_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_inner_odom", 1, &TruckServerNode::carInnerOdomCallback, this);
   sub_car_outter_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_outter_odom", 1, &TruckServerNode::carOutterOdomCallback, this);
   sub_car_cross_odom_ = nh_.subscribe<nav_msgs::Odometry>("/car_cross_odom", 1, &TruckServerNode::carCrossOdomCallback, this);
