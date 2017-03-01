@@ -270,6 +270,16 @@ Visualization Manager:
       Topic: /car_cross_path
       Unreliable: false
       Value: true
+    - Angle Tolerance: 0.1
+      Class: rviz/Odometry
+      Color: 255; 25; 0
+      Enabled: true
+      Keep: 1000
+      Length: 1
+      Name: Odometry
+      Position Tolerance: 0.1
+      Topic: /truck/global/odom
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -294,16 +304,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 120.676
+      Distance: 230.513
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -1.1696
-        Y: -0.00355359
-        Z: 1.69817
+        X: -23.8149
+        Y: 15.4253
+        Z: 1.34575
       Name: Current View
       Near Clip Distance: 0.01
       Pitch: 1.5548
