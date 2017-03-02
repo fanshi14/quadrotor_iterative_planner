@@ -37,6 +37,7 @@ public:
   bool m_debug_mode;
   bool m_dji_mode;
   bool m_landing_mode;
+  bool m_global_coordinate_control_mode;
   double m_uav_vel_ub;
   double m_uav_vel_lb;
   double m_uav_acc_ub;

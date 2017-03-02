@@ -47,6 +47,7 @@
     <param name="target_height" value="0.8" />
 
     <!-- quadrotor command -->
+    <param name="global_coordinate_control_mode" value="false" />
     <param name="uav_odom_sub_topic_name" type="string" value="/ground_truth/state" unless="$(arg dji)" />
     <param name="uav_odom_sub_topic_name" type="string" value="/dji_sdk/odometry" if="$(arg dji)" />
     <param name="uav_odom_sub_topic_name" type="string" value="/ground_truth/state" if="$(arg debug)" />
@@ -84,7 +85,7 @@
   <group unless="$(arg debug)">
     <group if="$(arg dji)">
       <node pkg="truck_server" type="dji_uav_commander.py" name="dji_uav_commander" output="screen">
-        <param name="global_coordinate_control" value="true" />
+        <param name="global_coordinate_control_mode" value="false" />
         <param name="control_velocity_sub_topic_name" value="/cmd_vel" />
       </node>
     </group>

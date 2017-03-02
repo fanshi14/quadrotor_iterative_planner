@@ -8,6 +8,7 @@ void QuadrotorCommand::onInit()
   private_nh.param("debug_mode", m_debug_mode, true);
   private_nh.param("dji_mode", m_dji_mode, true);
   private_nh.param("landing_mode", m_landing_mode, true);
+  private_nh.param("global_coordinate_control", m_global_coordinate_control_mode, false);
   private_nh.param("uav_vel_upper_bound", m_uav_vel_ub, 7.0);
   private_nh.param("uav_vel_lower_bound", m_uav_vel_lb, -7.0);
   private_nh.param("uav_acc_upper_bound", m_uav_acc_ub, 2.0);
@@ -114,8 +115,8 @@ void QuadrotorCommand::trackTrajectory()
   if (uav_vel_absolute_value > m_uav_vel_ub)
     uav_vel = uav_vel * m_uav_vel_ub / uav_vel_absolute_value;
 
-  /* When not in dji mode but hector, the controller is locally based on uav coordinate. */
-  if (!m_dji_mode || !m_debug_mode){
+  /* Judge if the controller is locally based on uav coordinate. */
+  if (!m_global_coordinate_control_mode){
     uav_vel = r_z.inverse() * uav_vel;
   }
 
