@@ -3,24 +3,30 @@
   <!-- 1 is circle track, 2 has bridge, 3 has crossing car, 4 has bridge and crossing car -->
   <arg name="route_id" default="4"/>
   <arg name="radius" default="30.0"/>
-  <arg name="has_car_outter" default="true"/>
-  <arg name="has_car_inner" default="true"/>
-  <arg name="spline_degree" default="2"/>
+  <arg name="has_car_outter" default="false"/>
+  <arg name="has_car_inner" default="false"/>
   <arg name="empty_world" default="true"/>
-  <arg name="gazebo_mode" default="true"/>
+  <arg name="gazebo" default="true"/>
+  <arg name="debug" default="false"/>
+  <arg name="dji" default="false"/>
+  <arg name="landing" default="false"/>
+  <arg name="collision" default="false"/>
+  <arg name="x" default="-10.0"/>
+  <arg name="y" default="-30.0"/>
 
   <node pkg="truck_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
-    <param name="gazebo_mode" value="$(arg gazebo_mode)" />
+    <param name="debug_mode" value="$(arg debug)" />
+    <param name="dji_mode" value="$(arg dji)" />
+    <param name="landing_mode" value="$(arg landing)" />
+    <param name="collision_detection" value="$(arg collision)" />
     <param name="route_id" value="$(arg route_id)" />
     <param name="resolution" value="0.2" />
     <param name="tree_depth" value="10" />
     <param name="frame_id" type="string" value="world" />
     <param name="has_car_inner" value="$(arg has_car_inner)" />
     <param name="has_car_outter" value="$(arg has_car_outter)" />
-    <param name="spline_degree" value="$(arg spline_degree)" />
-    <param name="ARA_rate" value="2.0" />
-    <!-- 7 is planar connected, 19 is including line connected, 27 is including verticle connected -->
-    <param name="graph_connected_mode" value="7" />
+    <param name="spline_degree" value="2" />
+    <param name="global_planning_period_time" value="1.0" />
 
     <!-- ground truth -->
     <param name="ground_truth_flag" value="false" />
@@ -30,8 +36,8 @@
     <param name="car_inner_vel_ground_truth" value="3.475" />
 
     <!-- track or circle -->
-    <param name="truck_odom_sub_topic_name" type="string" value="/truck_odom" if="$(arg gazebo_mode)" />
-    <param name="truck_odom_sub_topic_name" type="string" value="/truck/global/odom" unless="$(arg gazebo_mode)" />
+    <param name="truck_odom_sub_topic_name" type="string" value="/truck_odom" unless="$(arg dji)" />
+    <param name="truck_odom_sub_topic_name" type="string" value="/truck/global/odom" if="$(arg dji)" />
     <param name="route_radius" value="$(arg radius)" />
     <param name="octomap_update_rate" value="50" />
     <param name="vehicle_octomap_visualize_mode" value="1" />
@@ -41,11 +47,12 @@
     <param name="target_height" value="0.8" />
 
     <!-- quadrotor command -->
-    <param name="uav_odom_sub_topic_name" type="string" value="/ground_truth/state" if="$(arg gazebo_mode)" />
-    <param name="uav_odom_sub_topic_name" type="string" value="/dji_sdk/odometry" unless="$(arg gazebo_mode)" />
+    <param name="uav_odom_sub_topic_name" type="string" value="/ground_truth/state" unless="$(arg dji)" />
+    <param name="uav_odom_sub_topic_name" type="string" value="/dji_sdk/odometry" if="$(arg dji)" />
+    <param name="uav_odom_sub_topic_name" type="string" value="/ground_truth/state" if="$(arg debug)" />
     <param name="uav_cmd_pub_topic_name" type="string" value="/cmd_vel" />
-    <param name="uav_odom_freq" value="50.0" if="$(arg gazebo_mode)" />
-    <param name="uav_odom_freq" value="50.0" unless="$(arg gazebo_mode)" />
+    <param name="uav_odom_freq" value="50.0" unless="$(arg dji)" />
+    <param name="uav_odom_freq" value="50.0" if="$(arg dji)" />
     <param name="uav_vel_upper_bound"  value="10.0" />
     <param name="uav_vel_lower_bound"  value="-10.0" />
     <param name="uav_acc_upper_bound"  value="2.0" />
@@ -55,32 +62,47 @@
     <param name="uav_cmd_traj_track_d_gain"  value="0.0" />
   </node>
 
-  <group if="$(arg gazebo_mode)">
-    <node pkg="truck_server" type="sim_cars_poses_pub.py" name="sim_cars_poses_pub" output="screen">
-      <param name="has_car_inner" value="$(arg has_car_inner)" />
-      <param name="has_car_outter" value="$(arg has_car_outter)" />
-      <param name="route_id" value="$(arg route_id)" />
-      <param name="route_radius" value="$(arg radius)" />
-      <param name="truck_vel" value="4.17" />
-      <param name="car_outter_vel" value="4.865" />
-      <param name="car_inner_vel" value="3.475" />
-      <param name="car_cross_vel" value="2.0" />
-    </node>
+  <group if="$(arg debug)">
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find truck_server)/config/truck_octomap.rviz" />
+    <node pkg="truck_server" type="lane_marker_flag.py" name="lane_marker_flag" />
+    <group unless="$(arg dji)">
+      <!-- publish pre-set cars odometry -->
+      <node pkg="truck_server" type="sim_cars_poses_pub.py" name="sim_cars_poses_pub" output="screen">
+        <param name="has_car_inner" value="$(arg has_car_inner)" />
+        <param name="has_car_outter" value="$(arg has_car_outter)" />
+        <param name="route_id" value="$(arg route_id)" />
+        <param name="route_radius" value="$(arg radius)" />
+        <param name="truck_vel" value="4.17" />
+        <param name="car_outter_vel" value="4.865" />
+        <param name="car_inner_vel" value="3.475" />
+        <param name="car_cross_vel" value="2.0" />
+      </node>
+    </group>
+  </group>
+
+  <!-- subscribe uav commander and send to dji drone -->
+  <group unless="$(arg debug)">
+    <group if="$(arg dji)">
+      <node pkg="truck_server" type="dji_uav_commander.py" name="dji_uav_commander" output="screen">
+        <param name="global_coordinate_control" value="true" />
+        <param name="control_velocity_sub_topic_name" value="/cmd_vel" />
+      </node>
+    </group>
   </group>
 
   <!-- generate global bspline path message -->
   <node pkg="bspline_ros" type="tinyspline_ros_node" name="bspline_ros" output="screen">
-    <param name="spline_degree" value="$(arg spline_degree)" />
+    <param name="spline_degree" value="2" />
   </node>
 
   <node pkg="quadrotor_trajectory" type="vehicle_trajectory_estimator_node" name="truck_traj" output="screen">
-    <param name="vehicle_odom_sub_topic_name" type="string" value="/truck_odom" if="$(arg gazebo_mode)" />
-    <param name="vehicle_odom_sub_topic_name" type="string" value="/truck/global/odom" unless="$(arg gazebo_mode)" />
+    <param name="vehicle_odom_sub_topic_name" type="string" value="/truck_odom" unless="$(arg dji)" />
+    <param name="vehicle_odom_sub_topic_name" type="string" value="/truck/global/odom" if="$(arg dji)" />
     <param name="vehicle_traj_param_pub_topic_name" type="string" value="/truck_traj_param" />
     <param name="vehicle_traj_path_pub_topic_name" type="string" value="/truck_traj_path" />
     <param name="vehicle_traj_polynomial_order" value="10" />
-    <param name="vehicle_traj_derivation_order" value="4" if="$(arg gazebo_mode)" />
-    <param name="vehicle_traj_derivation_order" value="3" unless="$(arg gazebo_mode)" />
+    <param name="vehicle_traj_derivation_order" value="4" unless="$(arg dji)" />
+    <param name="vehicle_traj_derivation_order" value="3" if="$(arg dji)" />
     <param name="vehicle_lambda_D" value="10" />
     <param name="vehicle_estimate_odom_number" value="75" />
     <param name="vehicle_trajectory_generate_freqency" value="5" />
@@ -137,9 +159,6 @@
     <param name="param_output_param" value="false" />
   </node>
 
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find truck_server)/config/truck_octomap.rviz" />
-  <node pkg="truck_server" type="lane_marker_flag.py" name="lane_marker_flag" />
-
   <group if="$(arg empty_world)">
     <!-- Empty environment -->
     <include file="$(find gazebo_ros)/launch/empty_world.launch" >
@@ -147,35 +166,36 @@
     </include>
   </group>
 
-  <group unless="$(arg empty_world)">
-    <!-- Task1 environment with moving truck -->
-    <!-- <include file="$(find jsk_mbzirc_common)/launch/mbzirc_arena.launch" > -->
-    <!--   <arg name="gui" default="true"  /> -->
-    <!--   <arg name="world_name" default="$(find jsk_mbzirc_common)/gazebo_model/world/mbzirc_arena_task_1.world"/> -->
-    <!-- </include> -->
+  <group if="$(arg gazebo)">
+    <group unless="$(arg empty_world)">
+      <!-- Task1 environment with moving truck -->
+      <!-- <include file="$(find jsk_mbzirc_common)/launch/mbzirc_arena.launch" > -->
+      <!--   <arg name="gui" default="true"  /> -->
+      <!--   <arg name="world_name" default="$(find jsk_mbzirc_common)/gazebo_model/world/mbzirc_arena_task_1.world"/> -->
+      <!-- </include> -->
 
-    <!-- Task1 environment only -->
-    <include file="$(find jsk_mbzirc_common)/launch/mbzirc_arena_1.launch" >
-      <arg name="gui" value="false" />
-    </include>
-  </group>
+      <!-- Task1 environment only -->
+      <include file="$(find jsk_mbzirc_common)/launch/mbzirc_arena_1.launch" >
+        <arg name="gui" value="false" />
+      </include>
+    </group>
 
-  <group if="$(arg has_uav)">
-    <include file="$(find hector_quadrotor_gazebo)/launch/spawn_quadrotor.launch" >
-      <arg name="name" value="quadrotor"/>
-      <!-- <arg name="model" value="$(find jsk_mbzirc_tasks)/urdf/hawk.urdf.xacro"/> -->
-      <arg name="model" value="$(find hector_quadrotor_description)/urdf/quadrotor_downward_cam.gazebo.xacro"/>
-      <arg name="use_ground_truth_for_tf" value="true" />
-      <arg name="use_ground_truth_for_control" value="true" />
-      <arg name="x" value="-10"/>
-      <arg name="y" value="-$(arg radius)"/>
-      <arg name="z" value="0.5"/>
-    </include>
-    <node pkg="truck_server" type="uav_teleop_keyboard" name="uav_teleop_keyboard"
-          launch-prefix="xterm -e">
+    <group if="$(arg has_uav)">
+      <include file="$(find hector_quadrotor_gazebo)/launch/spawn_quadrotor.launch" >
+        <arg name="name" value="quadrotor"/>
+        <!-- <arg name="model" value="$(find jsk_mbzirc_tasks)/urdf/hawk.urdf.xacro"/> -->
+        <arg name="model" value="$(find hector_quadrotor_description)/urdf/quadrotor_downward_cam.gazebo.xacro"/>
+        <arg name="use_ground_truth_for_tf" value="true" />
+        <arg name="use_ground_truth_for_control" value="true" />
+        <arg name="x" value="$(arg x)"/>
+        <arg name="y" value="$(arg y)"/>
+        <arg name="z" value="0.5"/>
+      </include>
+      <node pkg="truck_server" type="uav_teleop_keyboard" name="uav_teleop_keyboard"
+            launch-prefix="xterm -e">
         <param name="teleopUGV" value="false"/>
         <remap from="teleopUGV" to="uav_teleop_keyboard/teleopUGV"/>
-    </node>
-
+      </node>
+    </group>
   </group>
 </launch>

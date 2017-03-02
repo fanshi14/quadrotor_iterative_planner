@@ -5,7 +5,9 @@ QuadrotorCommand::QuadrotorCommand() {}
 void QuadrotorCommand::onInit()
 {
   ros::NodeHandle private_nh("~");
-  private_nh.param("gazebo_mode", m_gazebo_mode, true);
+  private_nh.param("debug_mode", m_debug_mode, true);
+  private_nh.param("dji_mode", m_dji_mode, true);
+  private_nh.param("landing_mode", m_landing_mode, true);
   private_nh.param("uav_vel_upper_bound", m_uav_vel_ub, 7.0);
   private_nh.param("uav_vel_lower_bound", m_uav_vel_lb, -7.0);
   private_nh.param("uav_acc_upper_bound", m_uav_acc_ub, 2.0);
@@ -71,17 +73,29 @@ void QuadrotorCommand::trackTrajectory()
     m_uav_yaw_i_term_accumulation = 0.0;
   }
   double uav_current_traj_time = m_uav_odom.header.stamp.toSec() - m_traj_updated_time;
+  if (uav_current_traj_time < m_bspline_traj_ptr->m_t0){
+    ROS_WARN("Current odom time is less than bspline start time. ");
+    std::cout << "t0: " << m_bspline_traj_ptr->m_t0 << ", odom time: " << uav_current_traj_time << "\n";
+    //return;
+    uav_current_traj_time = m_bspline_traj_ptr->m_t0;
+  }
+  else if (uav_current_traj_time > m_bspline_traj_ptr->m_tn){
+    ROS_WARN("Current odom time is larger than bspline end time. ");
+    std::cout << "tn: " << m_bspline_traj_ptr->m_tn << ", odom time: " << uav_current_traj_time << "\n";
+    //return;
+    uav_current_traj_time < m_bspline_traj_ptr->m_tn;
+  }
   tf::Vector3 uav_des_world_vel = vectorToVector3(m_bspline_traj_ptr->evaluateDerive(uav_current_traj_time));
   tf::Vector3 uav_des_world_pos = vectorToVector3(m_bspline_traj_ptr->evaluate(uav_current_traj_time));
   tf::Vector3 truck_des_world_pos = vector3dToVector3(m_truck_traj.nOrderVehicleTrajectory(0, uav_current_traj_time) + Vector3d(0.0, 0.0, m_target_height));
   tf::Vector3 uav_des_truck_pos = uav_des_world_pos - truck_des_world_pos;
   tf::Vector3 uav_real_truck_pos;
-  if (m_gazebo_mode)
-    uav_real_truck_pos = m_uav_world_pos - m_truck_world_pos;
+  uav_real_truck_pos = m_uav_world_pos - m_truck_world_pos;
 
   tf::Matrix3x3  uav_rot_mat(m_uav_q);
   tfScalar uav_roll, uav_pitch, uav_yaw;
   uav_rot_mat.getRPY(uav_roll, uav_pitch, uav_yaw);
+  tf::Matrix3x3 r_z; r_z.setRPY(0, 0, uav_yaw);
 
   /* pid control in trajectory tracking */
   tf::Vector3 traj_track_p_term =  (uav_des_truck_pos - uav_real_truck_pos) * m_traj_track_p_gain;
@@ -100,9 +114,17 @@ void QuadrotorCommand::trackTrajectory()
   if (uav_vel_absolute_value > m_uav_vel_ub)
     uav_vel = uav_vel * m_uav_vel_ub / uav_vel_absolute_value;
 
+  /* When not in dji mode but hector, the controller is locally based on uav coordinate. */
+  if (!m_dji_mode || !m_debug_mode){
+    uav_vel = r_z.inverse() * uav_vel;
+  }
+
   m_uav_cmd.linear.x = uav_vel.getX();
   m_uav_cmd.linear.y = uav_vel.getY();
-  m_uav_cmd.linear.z = uav_vel.getZ();
+  if (m_landing_mode)
+    m_uav_cmd.linear.z = uav_vel.getZ();
+  else
+    m_uav_cmd.linear.z = 0.0;
 }
 
 bool QuadrotorCommand::uavMovingToPresetHeight(double height)

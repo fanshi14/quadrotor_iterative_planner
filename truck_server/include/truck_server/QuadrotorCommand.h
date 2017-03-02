@@ -34,7 +34,9 @@ public:
   virtual ~QuadrotorCommand();
 
   ros::NodeHandle m_nh;
-  bool m_gazebo_mode;
+  bool m_debug_mode;
+  bool m_dji_mode;
+  bool m_landing_mode;
   double m_uav_vel_ub;
   double m_uav_vel_lb;
   double m_uav_acc_ub;
