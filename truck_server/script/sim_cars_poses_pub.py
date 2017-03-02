@@ -32,6 +32,10 @@ def talker():
 
     print "Route id: ", route_id
 
+    ang_route_offset = 0.0
+    if route_id == 1:
+        ang_route_offset = 3.1416
+
     car_inner_ang_vel = car_inner_vel / car_inner_radius
     car_outter_ang_vel = car_outter_vel / car_outter_radius
     truck_ang_vel = truck_vel / truck_radius
@@ -48,7 +52,7 @@ def talker():
 
         ## truck
         cur_pose = Pose()
-        truck_ang = truck_ang_vel * cnt * 0.02
+        truck_ang = truck_ang_vel * cnt * 0.02 + ang_route_offset
         cur_pose.position.x = truck_radius * math.sin(truck_ang)
         cur_pose.position.y = -truck_radius * math.cos(truck_ang)
         cur_pose.position.z = 0.8
@@ -63,7 +67,7 @@ def talker():
         ## car small
         if has_car_inner:
             temp_pose = Pose()
-            car_inner_ang = car_inner_ang_vel * cnt * 0.02
+            car_inner_ang = car_inner_ang_vel * cnt * 0.02 + ang_route_offset
             temp_pose.position.x = car_inner_radius * math.sin(car_inner_ang)
             temp_pose.position.y = -car_inner_radius * math.cos(car_inner_ang)
             temp_pose.orientation.w = car_inner_ang
@@ -77,7 +81,7 @@ def talker():
         ## car big
         if has_car_outter:
             temp_pose = Pose()
-            car_outter_ang = car_outter_ang_vel * cnt * 0.02
+            car_outter_ang = car_outter_ang_vel * cnt * 0.02 + ang_route_offset
             temp_pose.position.x = car_outter_radius * math.sin(car_outter_ang)
             temp_pose.position.y = -car_outter_radius * math.cos(car_outter_ang)
             temp_pose.orientation.w = car_outter_ang

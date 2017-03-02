@@ -300,9 +300,6 @@ void TruckServerNode::initIterativeSearching()
 
   /* Initialize segment estimated landing time, which could be dynamically adjusted when meeting obstacles */
   double landing_time_z = (m_uav_odom.pose.pose.position.z - m_target_height) / 1.0;
-  /* if current z speed is nearly 0, then we assume there is an acceleration to 1 m/s taking 1 second */
-  // if (m_uav_odom.twist.twist.linear.z < 0.1)
-  //   landing_time_z += 1.0;
   double truck_vel = sqrt(pow(m_truck_odom.twist.twist.linear.x, 2) +pow(m_truck_odom.twist.twist.linear.y, 2));
   double landing_time_xy = sqrt(pow(m_uav_odom.pose.pose.position.x-m_truck_odom.pose.pose.position.x, 2) + pow(m_uav_odom.pose.pose.position.y-m_truck_odom.pose.pose.position.y, 2)) / (m_uav_default_upbound_vel - truck_vel);
   // if result is 5.1 s, we will use 6.0s as the landing time
@@ -313,9 +310,9 @@ void TruckServerNode::initIterativeSearching()
     if (landing_time_xy < m_uav_landing_time_xy_upbound)
       m_landing_time = landing_time_xy;
     else
-      m_landing_time = landing_time_z;
+      m_landing_time = m_uav_landing_time_xy_upbound;
   }
-  m_n_segments = (int)(m_landing_time + 0.99);
+  m_n_segments = (int)(m_landing_time + 0.5);
 
   /* Initialize segment default period time, which is 1.0s */
   m_segment_period_time = m_landing_time / m_n_segments;
