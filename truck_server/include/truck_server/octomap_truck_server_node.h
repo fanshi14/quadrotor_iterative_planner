@@ -185,7 +185,9 @@ void TruckServerNode::initIterativeSearching()
   }
 
   /* Initialize segment estimated landing time, which could be dynamically adjusted when meeting obstacles */
-  double truck_vel = sqrt(pow(m_truck_odom.twist.twist.linear.x, 2) +pow(m_truck_odom.twist.twist.linear.y, 2));
+  // Curently we do not have data in truck odometry`s twist.
+  // double truck_vel = sqrt(pow(m_truck_odom.twist.twist.linear.x, 2) +pow(m_truck_odom.twist.twist.linear.y, 2));
+  double truck_vel = 4.17;
   double landing_time_xy = sqrt(pow(m_uav_odom.pose.pose.position.x-m_truck_odom.pose.pose.position.x, 2) + pow(m_uav_odom.pose.pose.position.y-m_truck_odom.pose.pose.position.y, 2)) / (m_uav_default_upbound_vel - truck_vel);
   if (m_landing_mode){
     double landing_time_z = (m_uav_odom.pose.pose.position.z - m_target_height) / 1.0;
@@ -681,11 +683,11 @@ void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
   /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, landing finishes */
   m_uav.getUavOdom(msg);
   if (m_uav.m_uav_state == 1){
-    m_uav.uavMovingToPresetHeight(6.0);
+    m_uav.uavMovingToPresetHeight(10.0);
     m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
   }
   else if (m_uav.m_uav_state == 2){
-    if (m_uav.uavTruckHorizonDistance() < 4.0){
+    if (m_uav.uavTruckHorizonDistance() < 6.0){
       m_uav.m_uav_state = 3;
     }
   }

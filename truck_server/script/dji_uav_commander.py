@@ -46,7 +46,6 @@ import dynamic_reconfigure.server
 class uav_states:
 
     def init(self):
-        rospy.init_node('dji_commander', anonymous=True)
 
         ## Initial Process
         ### DJI bringup
@@ -59,6 +58,9 @@ class uav_states:
         ### Topic Name
         self.__control_velocity_sub_topic_name = rospy.get_param("~control_velocity_sub_topic_name", "/cmd_vel")
 
+        self.__start_control = rospy.get_param("~start_control", True)
+        print self.__start_control
+
         if self.__uav_global_coordinate_control_flag:
             rospy.loginfo("uav global coordinate control mode")
         else:
@@ -67,14 +69,29 @@ class uav_states:
         ## Subscriber
         self.__subscriber_uav_command = rospy.Subscriber(self.__control_velocity_sub_topic_name, Twist, self.__control_velocity_callback)
 
+        ## Publisher
+        self.__publisher_uav_control = rospy.Publisher("/control_ready", Empty, queue_size = 1)
         time.sleep(0.5)
+        msg = Empty()
+        self.__publisher_uav_control.publish(msg)
+
+    def __activate_on_signal_callback(self, msg):
+        if msg.data:
+            print "planning tracking mode: on"
+            self.__start_control = True
+        else:
+            print "planning tracking mode: off"
+            self.__start_control = False
 
     # Callback Func
     def __control_velocity_callback(self, msg):
+        if not self.__start_control:
+            return
+
         if self.__uav_global_coordinate_control_flag:
-            self.__drone.velocity_control(1, msg.linear.x, msg.linear.y, msg.linear.z, self.__control_yaw_ang)
+            self.__drone.velocity_control(1, msg.linear.x, msg.linear.y, msg.linear.z, 0.0)
         else:
-            self.__drone.velocity_control(0, msg.linear.x, msg.linear.y, msg.linear.z, self.__control_yaw_ang)
+            self.__drone.velocity_control(0, msg.linear.x, msg.linear.y, msg.linear.z, 0.0)
 
 if __name__ == '__main__':
     try:

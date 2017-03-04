@@ -41,6 +41,8 @@ include_directories(
   ${BSPLINE_ROS_INCLUDE_DIRS}
   ## tinyspline
   /home/shi/ros/shi_catkin_ws/build/bspline_ros/bspline/tinyspline/library
+  #${PROJECT_BINARY_DIR}/bspline/tinyspline/library
+  #/home/hawk/ros/jsk_mbzirc_task1_ws/build/bspline_ros/bspline/tinyspline/library
 )
 
 ## Octomap not support c++11, tinyspline origin version requires c++11
@@ -72,6 +74,8 @@ add_executable(octomap_truck_server_node src/octomap_truck_server_node.cpp)
 target_link_libraries(octomap_truck_server_node
   ## tinyspline
   /home/shi/ros/shi_catkin_ws/build/bspline_ros/bspline/tinyspline/build/lib/libtinysplinecpp.so
+  #${PROJECT_BINARY_DIR}/bspline/tinyspline/build/lib/libtinysplinecpp.so
+  #/home/hawk/ros/jsk_mbzirc_task1_ws/build/bspline_ros/bspline/tinyspline/build/lib/libtinysplinecpp.so
   ${PROJECT_NAME} ${LINK_LIBS})
 
 add_executable(uav_teleop_keyboard src/uav_teleop_keyboard.cpp)
