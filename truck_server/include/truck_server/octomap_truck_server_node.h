@@ -83,6 +83,7 @@ public:
   double m_uav_default_tracking_time;
 
   /* uav */
+  bool m_uav_direct_start_mode;
   nav_msgs::Odometry m_uav_odom;
   QuadrotorCommand m_uav;
   std::string m_uav_odom_sub_topic_name;
@@ -145,6 +146,7 @@ void TruckServerNode::onInit()
   private_nh.param("spline_path_pub_topic_name", m_spline_path_pub_topic_name, (std::string)"spline_path");
   private_nh.param("uav_odom_sub_topic_name", m_uav_odom_sub_topic_name, (std::string)"/ground_truth/state");
   private_nh.param("uav_cmd_pub_topic_name", m_uav_cmd_pub_topic_name, (std::string)"/cmd_vel");
+  private_nh.param("uav_direct_start_mode", m_uav_direct_start_mode, true);
 
   /* Init */
   m_uav.onInit();
@@ -154,6 +156,8 @@ void TruckServerNode::onInit()
   m_vehicles_visualize_prev_time = ros::Time().now().toSec();
   m_vehicle_traj_recv_time = m_vehicles_visualize_prev_time;
   m_global_planning_period_time = m_global_planning_period_default_time;
+  if (m_uav_direct_start_mode)
+    m_uav.m_uav_state = 3; // in direct start mode, uav is ready to directly tracking.
 
   /* Subscriber */
   m_sub_lane_marker_flag = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
@@ -362,8 +366,8 @@ void TruckServerNode::controlPtsRandomSet()
 void TruckServerNode::laneMarkerCallback(const std_msgs::Empty msg)
 {
   m_truck_ptr->laneMarkerVisualization();
-  if (m_route_id == 3 || m_route_id == 4)
-    m_truck_ptr->crossLaneMarkerVisualization();
+  // if (m_route_id == 3 || m_route_id == 4)
+  //   m_truck_ptr->crossLaneMarkerVisualization();
 }
 
 
