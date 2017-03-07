@@ -270,7 +270,7 @@ void TruckServerNode::onIterativeSearching()
     target_cur_pt = Vector3d(m_truck_odom.pose.pose.position.x, m_truck_odom.pose.pose.position.y, (m_control_point_vec[0])[2]);
   for (int i = 1; i <= m_n_segments-2; ++i){
     Vector3d cur_control_pt;
-    cur_control_pt = (m_control_point_vec[0] - target_cur_pt) / (m_n_total_segments-1) * (m_n_segments-1-i) + m_truck_traj_base.nOrderVehicleTrajectory(0, i*m_segment_period_time) + Vector3d(0.0, 0.0, target_cur_pt[2]);
+    cur_control_pt = (m_control_point_vec[0] - target_cur_pt) / (m_n_total_segments-1) * (m_n_total_segments-1-i) + m_truck_traj_base.nOrderVehicleTrajectory(0, i*m_segment_period_time) + Vector3d(0.0, 0.0, target_cur_pt[2]);
     m_control_point_vec.push_back(cur_control_pt);
   }
 
