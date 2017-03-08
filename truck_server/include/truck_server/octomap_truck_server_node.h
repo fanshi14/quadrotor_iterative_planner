@@ -57,6 +57,7 @@ public:
   bool m_dji_mode;
   bool m_debug_mode;
   bool m_landing_mode;
+  bool m_gazebo_mode;
 
   /* truck information */
   nav_msgs::Odometry m_truck_odom;
@@ -132,6 +133,7 @@ void TruckServerNode::onInit()
   private_nh.param("dji_mode", m_dji_mode, false);
   private_nh.param("debug_mode", m_debug_mode, true);
   private_nh.param("landing_mode", m_landing_mode, true);
+  private_nh.param("gazebo_mode", m_gazebo_mode, true);
   private_nh.param("resolution", m_octomap_res, 0.1);
   private_nh.param("tree_depth", m_octomap_tree_depth, 16);
   private_nh.param("route_id", m_route_id, 1);
@@ -179,7 +181,8 @@ void TruckServerNode::initIterativeSearching()
 {
   /* Clear previous vector data, marker, octree data */
   if (!m_control_point_vec.empty()){
-    controlPolygonDisplay(0);
+    if (m_gazebo_mode)
+      controlPolygonDisplay(0);
     m_control_point_vec.clear();
   }
   if (!m_object_seg_ptr_vec.empty()){
@@ -319,11 +322,26 @@ void TruckServerNode::runIterativeSearching()
   initIterativeSearching();
   onIterativeSearching();
 
+  /* Input control points as param into bspline member */
+  geometry_msgs::PolygonStamped control_polygon_points;
+  for (int i = 0; i < m_control_point_vec.size(); ++i){
+    geometry_msgs::Point32 control_point, time_point;
+    time_point.x = m_segment_period_time * i;
+    control_polygon_points.polygon.points.push_back(time_point);
+    vector3dConvertToPoint32(m_control_point_vec[i], control_point);
+    control_polygon_points.polygon.points.push_back(control_point);
+  }
+  m_bspline_generator.bsplineParamInput(&control_polygon_points);
+  m_bspline_generator.getDerive();
+
   /* test: specific control points test */
   //controlPtsRandomSet();
 
   /* publish control points */
-  controlPolygonDisplay(1);
+  if (m_gazebo_mode)
+    controlPolygonDisplay(1);
+
+  ROS_INFO("Iterative searching is finished.");
 
   /* Print the value of control points */
   // for (int i = 0; i < m_control_point_vec.size(); ++i){
@@ -434,33 +452,6 @@ void TruckServerNode::controlPolygonDisplay(int mode){
   control_point_marker.type = visualization_msgs::Marker::SPHERE;
   line_list_marker.type = visualization_msgs::Marker::LINE_LIST;
   line_array_truck_gt_marker.type = visualization_msgs::Marker::LINE_STRIP;
-
-  geometry_msgs::PolygonStamped control_polygon_points;
-  control_polygon_points.header = control_point_marker.header;
-
-  for (int i = 0; i < control_points_num; ++i){
-    geometry_msgs::Point32 control_point, time_point;
-    time_point.x = m_segment_period_time * i;
-    control_polygon_points.polygon.points.push_back(time_point);
-    vector3dConvertToPoint32(m_control_point_vec[i], control_point);
-    control_polygon_points.polygon.points.push_back(control_point);
-  }
-  if (mode == 1){
-    m_bspline_generator.bsplineParamInput(&control_polygon_points);
-    /* Print knot velocity */
-    m_bspline_generator.getDerive();
-    // std::cout << "Print Knot info. \n" ;
-    // for (int j = m_bspline_generator.m_deg; j < m_bspline_generator.m_n_knots - m_bspline_generator.m_deg; ++j){
-    //   double knot_time = m_bspline_generator.m_knotpts[j];
-    //   std::vector<double> knot_vel_vec = m_bspline_generator.evaluateDerive(knot_time);
-    //   double knot_vel = sqrt(pow(knot_vel_vec[0],2) + pow(knot_vel_vec[1],2) + pow(knot_vel_vec[2],2));
-    //   /* Debug output */
-    //   if (knot_vel > 10.0)
-    //     ROS_ERROR("!!!!!!!!!!!!!!!!!!!! Knot vel is too large!!!!");
-    //   std::cout << "[Knot] " << j << ": " << knot_time << ", vel: " << knot_vel << "|| "
-    //             << knot_vel_vec[0] << ", "<< knot_vel_vec[1] << ", "<< knot_vel_vec[2] << "\n";
-    // }
-  }
 
   line_list_marker.id = id_cnt;
   ++id_cnt;
