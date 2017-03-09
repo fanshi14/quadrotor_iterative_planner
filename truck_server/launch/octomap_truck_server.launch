@@ -23,6 +23,7 @@
     <param name="frame_id" type="string" value="world" />
     <param name="spline_degree" value="2" />
     <param name="global_planning_period_time" value="1.0" />
+    <param name="trajectory_function_print_flag" value="false" />
 
     <!-- track or circle -->
     <param name="truck_odom_sub_topic_name" type="string" value="/truck_odom" unless="$(arg dji)" />

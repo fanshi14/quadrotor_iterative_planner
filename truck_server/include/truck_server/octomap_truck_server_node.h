@@ -64,6 +64,7 @@ public:
   std::string m_truck_odom_sub_topic_name;
   VehicleTrajectoryBase m_truck_traj_base;
   TruckOctomapServer* m_truck_ptr;
+  bool m_truck_traj_param_print_flag;
 
   /* bspline generator */
   bsplineGenerate m_bspline_generator;
@@ -149,6 +150,7 @@ void TruckServerNode::onInit()
   private_nh.param("uav_odom_sub_topic_name", m_uav_odom_sub_topic_name, (std::string)"/ground_truth/state");
   private_nh.param("uav_cmd_pub_topic_name", m_uav_cmd_pub_topic_name, (std::string)"/cmd_vel");
   private_nh.param("uav_direct_start_mode", m_uav_direct_start_mode, true);
+  private_nh.param("trajectory_function_print_flag", m_truck_traj_param_print_flag, true);
 
   /* Init */
   m_uav.onInit();
@@ -420,6 +422,8 @@ void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayCo
     for (int i = 0; i < 2*traj_order+1; ++i)
       data.push_back(msg->data[i]);
     m_truck_traj_base.onInit(traj_order, data);
+    if (m_truck_traj_param_print_flag)
+      m_truck_traj_base.printAll();
 
     /* run Iterative Searching */
     if (m_uav.m_uav_state == 3){
