@@ -131,9 +131,9 @@ void TruckServerNode::onInit()
 
   private_nh.param("collision_detection", m_collision_detection_flag, false);
   private_nh.param("dji_mode", m_dji_mode, false);
-  private_nh.param("debug_mode", m_debug_mode, true);
-  private_nh.param("landing_mode", m_landing_mode, true);
-  private_nh.param("gazebo_mode", m_gazebo_mode, true);
+  private_nh.param("debug_mode", m_debug_mode, false);
+  private_nh.param("landing_mode", m_landing_mode, false);
+  private_nh.param("gazebo_mode", m_gazebo_mode, false);
   private_nh.param("resolution", m_octomap_res, 0.1);
   private_nh.param("tree_depth", m_octomap_tree_depth, 16);
   private_nh.param("route_id", m_route_id, 1);
@@ -153,7 +153,9 @@ void TruckServerNode::onInit()
   /* Init */
   m_uav.onInit();
   m_bspline_generator.onInit(m_spline_degree, true, m_spline_path_pub_topic_name);
-  m_truck_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth);
+  if (m_collision_detection_flag || m_gazebo_mode){
+    m_truck_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth);
+  }
   m_octomap_boarder_val = m_octomap_res * pow(2, m_octomap_tree_depth-1);
   m_vehicles_visualize_prev_time = ros::Time().now().toSec();
   m_vehicle_traj_recv_time = m_vehicles_visualize_prev_time;
@@ -185,10 +187,13 @@ void TruckServerNode::initIterativeSearching()
       controlPolygonDisplay(0);
     m_control_point_vec.clear();
   }
-  if (!m_object_seg_ptr_vec.empty()){
-    for (int i = 0; i < m_object_seg_ptr_vec.size(); ++i)
-      m_object_seg_ptr_vec[i]->m_octree->clear();
-    m_object_seg_ptr_vec.clear();
+
+  if (m_collision_detection_flag){
+    if (!m_object_seg_ptr_vec.empty()){
+      for (int i = 0; i < m_object_seg_ptr_vec.size(); ++i)
+        m_object_seg_ptr_vec[i]->m_octree->clear();
+      m_object_seg_ptr_vec.clear();
+    }
   }
 
   /* Initialize segment estimated landing time, which could be dynamically adjusted when meeting obstacles */
@@ -341,7 +346,7 @@ void TruckServerNode::runIterativeSearching()
   if (m_gazebo_mode)
     controlPolygonDisplay(1);
 
-  ROS_INFO("Iterative searching is finished.");
+  //ROS_INFO("Iterative searching is finished.");
 
   /* Print the value of control points */
   // for (int i = 0; i < m_control_point_vec.size(); ++i){
@@ -383,7 +388,8 @@ void TruckServerNode::controlPtsRandomSet()
 
 void TruckServerNode::laneMarkerCallback(const std_msgs::Empty msg)
 {
-  m_truck_ptr->laneMarkerVisualization();
+  if (m_gazebo_mode)
+    m_truck_ptr->laneMarkerVisualization();
   // if (m_route_id == 3 || m_route_id == 4)
   //   m_truck_ptr->crossLaneMarkerVisualization();
 }
@@ -431,7 +437,7 @@ void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayCo
 
 void TruckServerNode::controlPolygonDisplay(int mode){
   int control_points_num = m_control_point_vec.size();
-  std::cout << "[Display] Control points number: " << control_points_num << "\n";
+  //std::cout << "[Display] Control points number: " << control_points_num << "\n";
   int id_cnt = 0;
   visualization_msgs::MarkerArray path_markers;
   visualization_msgs::Marker control_point_marker, line_list_marker;
@@ -658,12 +664,15 @@ void TruckServerNode::truckOdomCallback(const nav_msgs::OdometryConstPtr& msg)
   m_uav.getTruckOdom(msg);
 
   m_truck_odom = *msg;
-  double cur_time = ros::Time().now().toSec();
-  if (cur_time - m_vehicles_visualize_prev_time > m_vehicles_visualize_period_time){
-    m_vehicles_visualize_prev_time = cur_time;
-    vehicleCurrentPosVisualization(0);
-    m_truck_ptr->publishTruckAll(ros::Time().now());
-    m_truck_ptr->m_octree->clear();
+
+  if (m_gazebo_mode){
+    double cur_time = ros::Time().now().toSec();
+    if (cur_time - m_vehicles_visualize_prev_time > m_vehicles_visualize_period_time){
+      m_vehicles_visualize_prev_time = cur_time;
+      vehicleCurrentPosVisualization(0);
+      m_truck_ptr->publishTruckAll(ros::Time().now());
+      m_truck_ptr->m_octree->clear();
+    }
   }
 }
 

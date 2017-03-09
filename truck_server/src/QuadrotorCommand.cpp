@@ -75,13 +75,15 @@ void QuadrotorCommand::trackTrajectory()
   }
   double uav_current_traj_time = m_uav_odom.header.stamp.toSec() - m_traj_updated_time;
   if (uav_current_traj_time < m_bspline_traj_ptr->m_t0){
-    ROS_WARN("Current odom time is less than bspline start time. ");
+    // todo: 0309
+    //ROS_WARN("Current odom time is less than bspline start time. ");
     std::cout << "t0: " << m_bspline_traj_ptr->m_t0 << ", odom time: " << uav_current_traj_time << "\n";
     //return;
     uav_current_traj_time = m_bspline_traj_ptr->m_t0;
   }
   else if (uav_current_traj_time > m_bspline_traj_ptr->m_tn){
-    ROS_WARN("Current odom time is larger than bspline end time. ");
+    // todo: 0309
+    // ROS_WARN("Current odom time is larger than bspline end time. ");
     std::cout << "tn: " << m_bspline_traj_ptr->m_tn << ", odom time: " << uav_current_traj_time << "\n";
     //return;
     uav_current_traj_time < m_bspline_traj_ptr->m_tn;

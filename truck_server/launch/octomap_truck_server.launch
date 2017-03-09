@@ -1,5 +1,5 @@
 <launch>
-  <arg name="has_uav" default="true"/>
+  <arg name="has_hector" default="true"/>
   <arg name="route_id" default="1"/>
   <arg name="radius" default="30.0"/>
   <arg name="empty_world" default="true"/>
@@ -28,8 +28,6 @@
     <param name="truck_odom_sub_topic_name" type="string" value="/truck_odom" unless="$(arg dji)" />
     <param name="truck_odom_sub_topic_name" type="string" value="/object/global/odom" if="$(arg dji)" />
     <param name="route_radius" value="$(arg radius)" />
-    <param name="octomap_update_rate" value="50" />
-    <param name="vehicle_octomap_visualize_mode" value="1" />
     <param name="target_height" value="0.8" />
 
     <!-- quadrotor command -->
@@ -117,7 +115,7 @@
       </include>
     </group>
 
-    <group if="$(arg has_uav)">
+    <group if="$(arg has_hector)">
       <include file="$(find hector_quadrotor_gazebo)/launch/spawn_quadrotor.launch" >
         <arg name="name" value="quadrotor"/>
         <!-- <arg name="model" value="$(find jsk_mbzirc_tasks)/urdf/hawk.urdf.xacro"/> -->
