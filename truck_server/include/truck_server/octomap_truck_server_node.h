@@ -412,6 +412,10 @@ void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
 
 void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
 {
+  /* When in force landing state, do not update truck trajectory. */
+  if (m_uav.m_uav_state == 5 || m_uav.m_uav_state == 6)
+    return;
+
   double cur_time = ros::Time().now().toSec();
   if (cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time){
     m_global_planning_period_time = m_global_planning_period_default_time;
@@ -688,7 +692,7 @@ void TruckServerNode::uavStartFlagCallback(const std_msgs::Empty msg)
 void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
   m_uav_odom = *msg;
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, landing finishes */
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, force land; 6, land finishes */
   m_uav.getUavOdom(msg);
   if (m_uav.m_uav_state == 1){
     m_uav.uavMovingToPresetHeight(10.0);
@@ -699,12 +703,17 @@ void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
       m_uav.m_uav_state = 3;
     }
   }
-  else if (m_uav.m_uav_state == 3){
+  else if (m_uav.m_uav_state == 3 || m_uav.m_uav_state == 4){
     /* In case traj not being calculated before state changes to 3 */
     if (m_uav.m_traj_first_updated){
       m_uav.trackTrajectory();
       m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
     }
+  }
+  else if (m_uav.m_uav_state == 5 || m_uav.m_uav_state == 6){
+    std::cout << m_uav.m_uav_state << "\n";
+    m_uav.trackGlobalTrajectory();
+    m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
   }
 }
 

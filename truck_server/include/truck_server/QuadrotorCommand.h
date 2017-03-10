@@ -50,10 +50,14 @@ public:
   tf::Vector3 m_uav_truck_world_pos;
   tf::Quaternion m_uav_q;
   nav_msgs::Odometry m_truck_odom;
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, landing finishes */
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, force land; 6, land finishes */
   int m_uav_state;
   nav_msgs::Odometry m_uav_odom;
   geometry_msgs::Twist m_uav_cmd;
+  int m_uav_going_down_cnt;
+  int m_uav_force_landing_cnt;
+  double m_uav_landing_constant_speed;
+  double m_uav_force_landing_height_upperbound;
 
   // pid
   double m_traj_track_p_gain;
@@ -79,6 +83,7 @@ public:
   void getTruckOdom(const nav_msgs::OdometryConstPtr& truck_odom_msg);
   void getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg);
   void trackTrajectory();
+  void trackGlobalTrajectory();
   double uavTruckHorizonDistance();
   void updateUavTruckRelPos();
   void trajectoryTracking(Vector3d uav_des_pos, Vector3d uav_des_vel);
