@@ -14,6 +14,7 @@
 #include <std_msgs/Empty.h>
 #include <std_msgs/Float64.h>
 #include <std_msgs/Float64MultiArray.h>
+#include <quadrotor_trajectory/TrackParamStamped.h>
 #include <iostream>
 #include <math.h>
 #include <visualization_msgs/Marker.h>
@@ -95,7 +96,8 @@ public:
 
   /* callback function */
   void laneMarkerCallback(const std_msgs::Empty msg);
-  void truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg);
+  //void truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg);
+  void truckTrajParamCallback(const quadrotor_trajectory::TrackParamStampedConstPtr& msg);
   void truckOdomCallback(const nav_msgs::OdometryConstPtr& msg);
 
   /* octomap */
@@ -167,7 +169,7 @@ void TruckServerNode::onInit()
 
   /* Subscriber */
   m_sub_lane_marker_flag = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
-  m_sub_truck_traj_param = nh_.subscribe<std_msgs::Float64MultiArray>("/truck_traj_param", 1, &TruckServerNode::truckTrajParamCallback, this);
+  m_sub_truck_traj_param = nh_.subscribe<quadrotor_trajectory::TrackParamStamped>("/truck_traj_param", 1, &TruckServerNode::truckTrajParamCallback, this);
   m_sub_truck_odom = nh_.subscribe<nav_msgs::Odometry>(m_truck_odom_sub_topic_name, 1, &TruckServerNode::truckOdomCallback, this);
   m_sub_uav_odom = nh_.subscribe<nav_msgs::Odometry>(m_uav_odom_sub_topic_name, 1, &TruckServerNode::uavOdomCallback, this);
   m_sub_uav_start_flag = nh_.subscribe<std_msgs::Empty>("/uav_start_flag", 1, &TruckServerNode::uavStartFlagCallback, this);
@@ -410,27 +412,27 @@ void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
   }
 }
 
-void TruckServerNode::truckTrajParamCallback(const std_msgs::Float64MultiArrayConstPtr& msg)
+void TruckServerNode::truckTrajParamCallback(const quadrotor_trajectory::TrackParamStampedConstPtr& msg)
 {
   /* When in force landing state, do not update truck trajectory. */
   if (m_uav.m_uav_state == 5 || m_uav.m_uav_state == 6)
     return;
 
-  double cur_time = ros::Time().now().toSec();
+  double cur_time = msg->header.stamp.toSec();
   if (cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time){
     m_global_planning_period_time = m_global_planning_period_default_time;
     m_vehicle_traj_recv_time = cur_time;
 
-    int traj_order = msg->layout.dim[0].size;
+    int traj_order = msg->params.layout.dim[0].size;
     std::vector<double> data;
     for (int i = 0; i < 2*traj_order+1; ++i)
-      data.push_back(msg->data[i]);
+      data.push_back(msg->params.data[i]);
     m_truck_traj_base.onInit(traj_order, data);
     if (m_truck_traj_param_print_flag)
       m_truck_traj_base.printAll();
 
     /* run Iterative Searching */
-    if (m_uav.m_uav_state == 3){
+    if (m_uav.m_uav_state == 3 || m_uav.m_uav_state == 4){
       runIterativeSearching();
 
       /* assign param to uav */
