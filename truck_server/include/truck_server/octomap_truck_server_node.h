@@ -91,6 +91,8 @@ public:
   QuadrotorCommand m_uav;
   std::string m_uav_odom_sub_topic_name;
   std::string m_uav_cmd_pub_topic_name;
+  double m_uav_landing_constant_vel;
+  double m_uav_force_landing_vel;
 
   void onInit();
 
@@ -153,6 +155,8 @@ void TruckServerNode::onInit()
   private_nh.param("uav_cmd_pub_topic_name", m_uav_cmd_pub_topic_name, (std::string)"/cmd_vel");
   private_nh.param("uav_direct_start_mode", m_uav_direct_start_mode, true);
   private_nh.param("trajectory_function_print_flag", m_truck_traj_param_print_flag, true);
+  private_nh.param("uav_landing_constant_speed", m_uav_landing_constant_vel, -0.4);
+  private_nh.param("uav_force_landing_speed", m_uav_force_landing_vel, -1.0);
 
   /* Init */
   m_uav.onInit();
@@ -205,29 +209,33 @@ void TruckServerNode::initIterativeSearching()
   // double truck_vel = sqrt(pow(m_truck_odom.twist.twist.linear.x, 2) +pow(m_truck_odom.twist.twist.linear.y, 2));
   double truck_vel = 4.17;
   double landing_time_xy = sqrt(pow(m_uav_odom.pose.pose.position.x-m_truck_odom.pose.pose.position.x, 2) + pow(m_uav_odom.pose.pose.position.y-m_truck_odom.pose.pose.position.y, 2)) / (m_uav_default_upbound_vel - truck_vel);
+  m_landing_time = landing_time_xy;
   if (m_landing_mode){
-    double landing_time_z = (m_uav_odom.pose.pose.position.z - m_target_height) / 1.0;
-    // if result is 5.1 s, we will use 6.0s as the landing time
-    if (landing_time_z > landing_time_xy)
-      m_landing_time = landing_time_z;
-    else
-      m_landing_time = landing_time_xy;
-  }
-  else{
-    m_landing_time = landing_time_xy;
+    /* If not start force landing, do not consider the influence from height to landing time, */
+    if (m_uav.m_uav_state == 5){
+      double landing_time_z = (m_uav_odom.pose.pose.position.z - m_target_height) / abs(m_uav_force_landing_vel);
+      // if result is 5.1 s, we will use 6.0s as the landing time
+      if (landing_time_z > landing_time_xy)
+        m_landing_time = landing_time_z;
+      else
+        m_landing_time = landing_time_xy;
+    }
   }
   m_n_total_segments = (int)(m_landing_time + 0.49);
   if (m_landing_time > m_uav_landing_time_xy_upbound){
     m_landing_time = m_uav_landing_time_xy_upbound;
     m_n_segments = (int)(m_landing_time + 0.49);
   }
+  /* If landing time is less than 2.0s, then assume its bspline has 2 segments. */
   else if (m_landing_time <= 2.0){
-    m_landing_time = 2.0;
+    /* If landing time is too small, eg. less than 0.5s, then assume landing time is 0.5s */
+    if (m_landing_time < 0.5)
+      m_landing_time = 0.5;
     m_n_total_segments = 2;
     m_n_segments = 2;
   }
   else
-    m_n_segments = (int)(m_landing_time + 0.5);
+    m_n_segments = (int)(m_landing_time + 0.49);
 
   /* If landing time is too small, make planning time longer */
   if (m_landing_time < m_global_planning_period_time)
@@ -253,22 +261,6 @@ void TruckServerNode::initIterativeSearching()
                m_uav_odom.twist.twist.linear.z*m_segment_period_time/2.0);
     m_control_point_vec.push_back(control_pt_1);
     break;
-
-    // Vector3d temp_3d;
-    // if (getGridCenter(obstacle_ptr, control_pt_1, temp_3d, -1)){
-    //   m_object_seg_ptr_vec.push_back(obstacle_ptr);
-    //   m_control_point_vec.push_back(control_pt_1);
-    //   /* if we have 2 segments on z axis, we have 3 segments in total (because of first and last point and its neighbor control points generating based on velocity constraits) */
-    //   m_landing_time += m_segment_period_time;
-    //   m_n_segments = int(m_landing_time / m_segment_period_time);
-    //   break;
-    // }
-    // else{
-    //   ROS_WARN("Control points 1 could not use!! Decrease initial gap to its 1/2.");
-    //   m_segment_period_time /= 2.0;
-    //   obstacle_ptr->m_octree->clear();
-    // }
-    // todo: check land point's forhead control point to decide segment_period_time
   }
 }
 
@@ -292,14 +284,17 @@ void TruckServerNode::onIterativeSearching()
   while(1){
     Vector3d control_pt_n;
     Vector3d control_pt_n_1;
-  if (m_landing_mode)
-    control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, m_target_height);
-  else
-    control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, (m_control_point_vec[0])[2]);
+    if (m_landing_mode)
+      control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, m_target_height);
+    else
+      control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, (m_control_point_vec[0])[2]);
     // todo: adding landing speed. Currently z-axis value is 0 in last triangle.
-    control_pt_n_1 = control_pt_n -
-      m_truck_traj_base.nOrderVehicleTrajectory(1, m_landing_time) * m_segment_period_time/2.0;
-
+    control_pt_n_1 = control_pt_n - m_truck_traj_base.nOrderVehicleTrajectory(1, m_landing_time) * m_segment_period_time/2.0;
+    if (m_uav.m_uav_state == 5){
+      control_pt_n_1[2] = m_target_height + m_uav_force_landing_vel * m_segment_period_time/2.0;
+      /* force landing trajectory plan finished, change to during force land mode */
+      m_uav.m_uav_state = 6;
+    }
     if (m_collision_detection_flag){
       TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
       /* Add obstacle of inner and outter cars, and static obstacles like bridge */
@@ -415,11 +410,11 @@ void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
 void TruckServerNode::truckTrajParamCallback(const quadrotor_trajectory::TrackParamStampedConstPtr& msg)
 {
   /* When in force landing state, do not update truck trajectory. */
-  if (m_uav.m_uav_state == 5 || m_uav.m_uav_state == 6)
+  if (m_uav.m_uav_state >= 6)
     return;
 
   double cur_time = msg->header.stamp.toSec();
-  if (cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time){
+  if (m_uav.m_uav_state == 5 || cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time){
     m_global_planning_period_time = m_global_planning_period_default_time;
     m_vehicle_traj_recv_time = cur_time;
 
@@ -432,7 +427,7 @@ void TruckServerNode::truckTrajParamCallback(const quadrotor_trajectory::TrackPa
       m_truck_traj_base.printAll();
 
     /* run Iterative Searching */
-    if (m_uav.m_uav_state == 3 || m_uav.m_uav_state == 4){
+    if (m_uav.m_uav_state >= 3){ // 3, 4, or 5
       runIterativeSearching();
 
       /* assign param to uav */
@@ -694,7 +689,7 @@ void TruckServerNode::uavStartFlagCallback(const std_msgs::Empty msg)
 void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
   m_uav_odom = *msg;
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, force land; 6, land finishes */
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, start force land; 6, during force land; 7, finish force land  */
   m_uav.getUavOdom(msg);
   if (m_uav.m_uav_state == 1){
     m_uav.uavMovingToPresetHeight(10.0);
@@ -705,17 +700,17 @@ void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
       m_uav.m_uav_state = 3;
     }
   }
-  else if (m_uav.m_uav_state == 3 || m_uav.m_uav_state == 4){
+  else if (m_uav.m_uav_state >= 6){ // 6 or 7
+    //std::cout << m_uav.m_uav_state << "\n";
+    m_uav.trackGlobalTrajectory();
+    m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
+  }
+  else if (m_uav.m_uav_state >= 3){ // 3, 4 or 5(just changed to start force land, trajectory not generated yet)
     /* In case traj not being calculated before state changes to 3 */
     if (m_uav.m_traj_first_updated){
       m_uav.trackTrajectory();
       m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
     }
-  }
-  else if (m_uav.m_uav_state == 5 || m_uav.m_uav_state == 6){
-    std::cout << m_uav.m_uav_state << "\n";
-    m_uav.trackGlobalTrajectory();
-    m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
   }
 }
 

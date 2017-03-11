@@ -32,7 +32,7 @@ void QuadrotorCommand::onInit()
   m_uav_cmd.linear.x = 0.0; m_uav_cmd.linear.y = 0.0; m_uav_cmd.linear.z = 0.0;
   m_uav_cmd.angular.x = 0.0; m_uav_cmd.angular.y = 0.0; m_uav_cmd.angular.z = 0.0;
 
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, force land; 6, land finishes */
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, start force land; 6, during force land; 7, finish force land */
   m_uav_state = 0;
 
   m_uav_going_down_cnt = 0;
@@ -91,7 +91,7 @@ void QuadrotorCommand::trackTrajectory()
     // ROS_WARN("Current odom time is larger than bspline end time. ");
     std::cout << "tn: " << m_bspline_traj_ptr->m_tn << ", odom time: " << uav_current_traj_time << "\n";
     //return;
-    uav_current_traj_time < m_bspline_traj_ptr->m_tn;
+    uav_current_traj_time = m_bspline_traj_ptr->m_tn;
   }
   tf::Vector3 uav_des_world_vel = vectorToVector3(m_bspline_traj_ptr->evaluateDerive(uav_current_traj_time));
   tf::Vector3 uav_des_world_pos = vectorToVector3(m_bspline_traj_ptr->evaluate(uav_current_traj_time));
@@ -135,7 +135,8 @@ void QuadrotorCommand::trackTrajectory()
     if (m_uav_state == 3){
       /* Make sure uav is not deviate too much, then starts to give speed in z axis */
       if (m_uav_going_down_cnt > 50){
-        if (uav_real_truck_pos[2] < m_uav_force_landing_height_upperbound){
+        if (uav_real_truck_pos[2] < m_uav_force_landing_height_upperbound + m_target_height){
+          ROS_INFO("Waiting force landing!!");
           m_uav_state = 4;
           m_uav_force_landing_cnt += 1;
         }
@@ -143,7 +144,7 @@ void QuadrotorCommand::trackTrajectory()
           landing_vel_z = m_uav_landing_constant_speed;
       }
       else{
-        if (target_distance_xy < 1.5)
+        if (target_distance_xy < 3.0)
           m_uav_going_down_cnt += 1;
       }
     }
@@ -152,8 +153,8 @@ void QuadrotorCommand::trackTrajectory()
       /* Force landing requires uav has 25 frames in the exact center of target */
       if (m_uav_force_landing_cnt > 25){
         /* Using force landing trajectory requires this trajectory is newly estimated, which would guarantee good accuracy in near future. */
-        if (uav_current_traj_time - m_bspline_traj_ptr->m_t0 < 0.3)
-          m_uav_state = 5;
+        ROS_INFO("Prepare to force landing.");
+        m_uav_state = 5;
       }
       else{
         if (target_distance_xy < 0.5)
@@ -167,7 +168,7 @@ void QuadrotorCommand::trackTrajectory()
 
 void QuadrotorCommand::trackGlobalTrajectory()
 {
-  if (m_uav_state == 6){
+  if (m_uav_state == 7){
     m_uav_cmd.linear.x = 0.0;
     m_uav_cmd.linear.y = 0.0;
     m_uav_cmd.linear.z = -1.5;
@@ -186,12 +187,12 @@ void QuadrotorCommand::trackGlobalTrajectory()
     // ROS_WARN("Current odom time is larger than bspline end time. ");
     std::cout << "tn: " << m_bspline_traj_ptr->m_tn << ", odom time: " << uav_current_traj_time << "\n";
     //return;
-    uav_current_traj_time < m_bspline_traj_ptr->m_tn;
+    uav_current_traj_time = m_bspline_traj_ptr->m_tn;
     ROS_INFO("UAV should already land. ");
     m_uav_cmd.linear.x = 0.0;
     m_uav_cmd.linear.y = 0.0;
     m_uav_cmd.linear.z = -1.5;
-    m_uav_state = 6;
+    m_uav_state = 7;
     return;
   }
   tf::Vector3 uav_des_world_vel = vectorToVector3(m_bspline_traj_ptr->evaluateDerive(uav_current_traj_time));

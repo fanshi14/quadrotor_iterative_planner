@@ -50,7 +50,8 @@ public:
   tf::Vector3 m_uav_truck_world_pos;
   tf::Quaternion m_uav_q;
   nav_msgs::Odometry m_truck_odom;
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, force land; 6, land finishes */
+
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, start force land; 6, during force land; 7, finish force land */
   int m_uav_state;
   nav_msgs::Odometry m_uav_odom;
   geometry_msgs::Twist m_uav_cmd;
