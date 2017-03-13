@@ -35,6 +35,7 @@ public:
 
   ros::NodeHandle m_nh;
   bool m_debug_mode;
+  bool m_verbose;
   bool m_dji_mode;
   bool m_landing_mode;
   bool m_global_coordinate_control_mode;
@@ -59,6 +60,8 @@ public:
   int m_uav_force_landing_cnt;
   double m_uav_landing_constant_speed;
   double m_uav_force_landing_height_upperbound;
+  int m_uav_force_landing_cnt_thresh;
+  int m_uav_force_landing_method;
 
   // pid
   double m_traj_track_p_gain;

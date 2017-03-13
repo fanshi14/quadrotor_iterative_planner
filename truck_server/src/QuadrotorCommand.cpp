@@ -6,6 +6,7 @@ void QuadrotorCommand::onInit()
 {
   ros::NodeHandle private_nh("~");
   private_nh.param("debug_mode", m_debug_mode, true);
+  private_nh.param("verbose", m_verbose, false);
   private_nh.param("dji_mode", m_dji_mode, true);
   private_nh.param("landing_mode", m_landing_mode, true);
   private_nh.param("global_coordinate_control", m_global_coordinate_control_mode, false);
@@ -23,6 +24,8 @@ void QuadrotorCommand::onInit()
   private_nh.param("target_height", m_target_height, 0.8);
   private_nh.param("uav_landing_constant_speed", m_uav_landing_constant_speed, -0.4);
   private_nh.param("uav_force_landing_height_upperbound", m_uav_force_landing_height_upperbound, 0.4);
+  private_nh.param("uav_force_landing_cnt_thresh", m_uav_force_landing_cnt_thresh, 5);
+  private_nh.param("uav_force_landing_method", m_uav_force_landing_method, 1);
 
   m_traj_track_i_term_accumulation.setValue(0.0, 0.0, 0.0);
   m_uav_yaw_i_term_accumulation = 0.0;
@@ -80,17 +83,19 @@ void QuadrotorCommand::trackTrajectory()
   }
   double uav_current_traj_time = m_uav_odom.header.stamp.toSec() - m_traj_updated_time;
   if (uav_current_traj_time < m_bspline_traj_ptr->m_t0){
-    // todo: 0309
-    //ROS_WARN("Current odom time is less than bspline start time. ");
-    std::cout << "t0: " << m_bspline_traj_ptr->m_t0 << ", odom time: " << uav_current_traj_time << "\n";
-    //return;
+    if(m_verbose)
+      {
+        ROS_WARN("Current odom time is less than bspline start time. ");
+        std::cout << "t0: " << m_bspline_traj_ptr->m_t0 << ", odom time: " << uav_current_traj_time << "\n";
+      }
     uav_current_traj_time = m_bspline_traj_ptr->m_t0;
   }
   else if (uav_current_traj_time > m_bspline_traj_ptr->m_tn){
-    // todo: 0309
-    // ROS_WARN("Current odom time is larger than bspline end time. ");
-    std::cout << "tn: " << m_bspline_traj_ptr->m_tn << ", odom time: " << uav_current_traj_time << "\n";
-    //return;
+    if(m_verbose)
+      {
+        ROS_WARN("Current odom time is larger than bspline end time. ");
+        std::cout << "tn: " << m_bspline_traj_ptr->m_tn << ", odom time: " << uav_current_traj_time << "\n";
+      }
     uav_current_traj_time = m_bspline_traj_ptr->m_tn;
   }
   tf::Vector3 uav_des_world_vel = vectorToVector3(m_bspline_traj_ptr->evaluateDerive(uav_current_traj_time));
@@ -151,10 +156,20 @@ void QuadrotorCommand::trackTrajectory()
     /* Wait for force landing */
     else if (m_uav_state == 4){
       /* Force landing requires uav has 25 frames in the exact center of target */
-      if (m_uav_force_landing_cnt > 25){
+      if (m_uav_force_landing_cnt > m_uav_force_landing_cnt_thresh){
         /* Using force landing trajectory requires this trajectory is newly estimated, which would guarantee good accuracy in near future. */
         ROS_INFO("Prepare to force landing.");
         m_uav_state = 5;
+        /* TODO: 20170312 force landing with same speed of truck */
+        if (m_uav_force_landing_method == 1){ //1, follow fixed truck velocity
+          tf::Vector3 truck_des_world_vel = vector3dToVector3(m_truck_traj.nOrderVehicleTrajectory(1, uav_current_traj_time));
+          tf::Vector3 truck_des_uav_vel = r_z.inverse() * truck_des_world_vel;
+          m_uav_state = 6;
+          m_uav_cmd.linear.x = truck_des_uav_vel[0];
+          m_uav_cmd.linear.y = truck_des_uav_vel[1];
+          m_uav_cmd.linear.z = -1.5;
+          return;
+        }
       }
       else{
         if (target_distance_xy < 0.5)
@@ -176,17 +191,19 @@ void QuadrotorCommand::trackGlobalTrajectory()
   }
   double uav_current_traj_time = m_uav_odom.header.stamp.toSec() - m_traj_updated_time;
   if (uav_current_traj_time < m_bspline_traj_ptr->m_t0){
-    // todo: 0309
-    //ROS_WARN("Current odom time is less than bspline start time. ");
-    std::cout << "t0: " << m_bspline_traj_ptr->m_t0 << ", odom time: " << uav_current_traj_time << "\n";
-    //return;
+    if(m_verbose)
+      {
+        ROS_WARN("Current odom time is less than bspline start time. ");
+        std::cout << "t0: " << m_bspline_traj_ptr->m_t0 << ", odom time: " << uav_current_traj_time << "\n";
+      }
     uav_current_traj_time = m_bspline_traj_ptr->m_t0;
   }
   else if (uav_current_traj_time > m_bspline_traj_ptr->m_tn){
-    // todo: 0309
-    // ROS_WARN("Current odom time is larger than bspline end time. ");
-    std::cout << "tn: " << m_bspline_traj_ptr->m_tn << ", odom time: " << uav_current_traj_time << "\n";
-    //return;
+    if(m_verbose)
+      {
+        ROS_WARN("Current odom time is larger than bspline end time. ");
+        std::cout << "tn: " << m_bspline_traj_ptr->m_tn << ", odom time: " << uav_current_traj_time << "\n";
+      }
     uav_current_traj_time = m_bspline_traj_ptr->m_tn;
     ROS_INFO("UAV should already land. ");
     m_uav_cmd.linear.x = 0.0;

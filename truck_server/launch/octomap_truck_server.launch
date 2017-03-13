@@ -50,6 +50,8 @@
     <param name="uav_landing_constant_speed"  value="-0.4" />
     <param name="uav_force_landing_speed"  value="-1.0" />
     <param name="uav_force_landing_height_upperbound"  value="0.4" />
+    <param name="uav_force_landing_cnt_thresh"  value="5" />
+    <param name="uav_force_landing_method"  value="1" /> <!-- 1, follow fixed truck velocity 2, follow fixed planned trajectory -->
   </node>
 
   <group if="$(arg debug)">
