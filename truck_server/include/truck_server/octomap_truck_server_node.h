@@ -435,6 +435,26 @@ void TruckServerNode::truckTrajParamCallback(const quadrotor_trajectory::TrackPa
     return;
 
   double cur_time = msg->header.stamp.toSec();
+
+  //0313
+  int traj_order_1 = msg->params.layout.dim[0].size;
+  std::vector<double> data_1;
+  VehicleTrajectoryBase truck_traj_base_1;
+  for (int i = 0; i < 2*traj_order_1+1; ++i)
+    data_1.push_back(msg->params.data[i]);
+  truck_traj_base_1.onInit(traj_order_1, data_1);
+  Vector3d truck_pos_1 = truck_traj_base_1.nOrderVehicleTrajectory(0, 0.0);
+  Vector3d truck_vel_1 = truck_traj_base_1.nOrderVehicleTrajectory(1, 0.0);
+  nav_msgs::Odometry truck_odom_estimated;
+  truck_odom_estimated.pose.pose.position.x = truck_pos_1[0];
+  truck_odom_estimated.pose.pose.position.y = truck_pos_1[1];
+  truck_odom_estimated.pose.pose.position.z = truck_pos_1[2];
+  truck_odom_estimated.twist.twist.linear.x = truck_vel_1[0];
+  truck_odom_estimated.twist.twist.linear.y = truck_vel_1[1];
+  truck_odom_estimated.twist.twist.linear.z = truck_vel_1[2];
+  m_pub_estimated_truck_odom.publish(truck_odom_estimated);
+
+
   if (m_uav.m_uav_state == 5 || cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time){
     m_global_planning_period_time = m_global_planning_period_default_time;
     m_vehicle_traj_recv_time = cur_time;
@@ -446,18 +466,6 @@ void TruckServerNode::truckTrajParamCallback(const quadrotor_trajectory::TrackPa
     m_truck_traj_base.onInit(traj_order, data);
     if (m_truck_traj_param_print_flag)
       m_truck_traj_base.printAll();
-
-    //0313
-    Vector3d truck_pos = m_truck_traj_base.nOrderVehicleTrajectory(0, 0.0);
-    Vector3d truck_vel = m_truck_traj_base.nOrderVehicleTrajectory(1, 0.0);
-    nav_msgs::Odometry truck_odom_estimated;
-    truck_odom_estimated.pose.pose.position.x = truck_pos[0];
-    truck_odom_estimated.pose.pose.position.y = truck_pos[1];
-    truck_odom_estimated.pose.pose.position.z = truck_pos[2];
-    truck_odom_estimated.twist.twist.linear.x = truck_vel[0];
-    truck_odom_estimated.twist.twist.linear.y = truck_vel[1];
-    truck_odom_estimated.twist.twist.linear.z = truck_vel[2];
-    m_pub_estimated_truck_odom.publish(truck_odom_estimated);
 
     /* run Iterative Searching */
     if (m_uav.m_uav_state >= 3){ // 3, 4, or 5
