@@ -37,8 +37,7 @@ void QuadrotorCommand::onInit()
   m_uav_cmd.linear.x = 0.0; m_uav_cmd.linear.y = 0.0; m_uav_cmd.linear.z = 0.0;
   m_uav_cmd.angular.x = 0.0; m_uav_cmd.angular.y = 0.0; m_uav_cmd.angular.z = 0.0;
 
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to track; 4, wait to land; 5, start to land; 6, wait to force land; 7, start force land; 8, during force land; 9, finish force land
- 4, wait to force land; 5, start force land; 6, during force land; 7, finish force land */
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to track; 4, wait to land; 5, start to land; 6, wait to force land; 7, start force land; 8, during force land; 9, finish force land */
   m_uav_state = 0;
 
   m_uav_going_down_cnt = 0;
