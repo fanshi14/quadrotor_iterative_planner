@@ -21,8 +21,10 @@ void QuadrotorCommand::onInit()
   private_nh.param("uav_cmd_traj_track_i_term_max", m_traj_track_i_term_max, 4.0);
   private_nh.param("uav_cmd_traj_track_d_term_max", m_traj_track_d_term_max, 0.0);
   private_nh.param("uav_odom_freq", m_uav_odom_freq, 50.0);
-  private_nh.param("target_height", m_target_height, 0.8);
-  private_nh.param("uav_landing_constant_speed", m_uav_landing_constant_speed, -0.4);
+  private_nh.param("target_height", m_target_height, 1.8);
+  private_nh.param("uav_tracking_landing_constant_speed", m_uav_tracking_landing_constant_speed, -0.4);
+  private_nh.param("uav_landing_constant_speed", m_uav_landing_constant_speed, -1.0);
+  private_nh.param("uav_start_landing_height_upperbound", m_uav_start_landing_height_upperbound, 5.0);
   private_nh.param("uav_force_landing_height_upperbound", m_uav_force_landing_height_upperbound, 0.4);
   private_nh.param("uav_force_landing_cnt_thresh", m_uav_force_landing_cnt_thresh, 5);
   private_nh.param("uav_force_landing_method", m_uav_force_landing_method, 1);
@@ -35,7 +37,8 @@ void QuadrotorCommand::onInit()
   m_uav_cmd.linear.x = 0.0; m_uav_cmd.linear.y = 0.0; m_uav_cmd.linear.z = 0.0;
   m_uav_cmd.angular.x = 0.0; m_uav_cmd.angular.y = 0.0; m_uav_cmd.angular.z = 0.0;
 
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, start force land; 6, during force land; 7, finish force land */
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to track; 4, wait to land; 5, start to land; 6, wait to force land; 7, start force land; 8, during force land; 9, finish force land
+ 4, wait to force land; 5, start force land; 6, during force land; 7, finish force land */
   m_uav_state = 0;
 
   m_uav_going_down_cnt = 0;
@@ -103,7 +106,7 @@ void QuadrotorCommand::trackTrajectory()
   tf::Vector3 truck_des_world_pos = vector3dToVector3(m_truck_traj.nOrderVehicleTrajectory(0, uav_current_traj_time) + Vector3d(0.0, 0.0, m_target_height));
   tf::Vector3 uav_des_truck_pos = uav_des_world_pos - truck_des_world_pos;
   tf::Vector3 uav_real_truck_pos;
-  uav_real_truck_pos = m_uav_world_pos - m_truck_world_pos;
+  uav_real_truck_pos = m_uav_world_pos - m_truck_world_pos; // z axis for truck_world_pos equals to 0.0
 
   tf::Matrix3x3  uav_rot_mat(m_uav_q);
   tfScalar uav_roll, uav_pitch, uav_yaw;
@@ -137,34 +140,39 @@ void QuadrotorCommand::trackTrajectory()
   double landing_vel_z = 0.0;
   if (m_landing_mode){
     double target_distance_xy = sqrt(pow(uav_real_truck_pos[0], 2) + pow(uav_real_truck_pos[1], 2));
-    if (m_uav_state == 3){
-      /* Make sure uav is not deviate too much, then starts to give speed in z axis */
-      if (m_uav_going_down_cnt > 50){
-        if (uav_real_truck_pos[2] < m_uav_force_landing_height_upperbound + m_target_height){
-          ROS_INFO("Waiting force landing!!");
-          m_uav_state = 4;
-          m_uav_force_landing_cnt += 1;
-        }
-        else
-          landing_vel_z = m_uav_landing_constant_speed;
+    if (m_uav_state == 3){ // start to track and reach to specific height
+      if (uav_real_truck_pos[2] < m_uav_start_landing_height_upperbound + m_target_height){
+        m_uav_state = 4;
+        std::cout << uav_real_truck_pos[2] << ", " << m_uav_world_pos[2] << ", " << m_uav_start_landing_height_upperbound + m_target_height << "\n\n";
+        ROS_INFO("[Change to state] Wait to land!");
       }
-      else{
-        if (target_distance_xy < 3.0)
-          m_uav_going_down_cnt += 1;
-      }
+      else
+        landing_vel_z = m_uav_tracking_landing_constant_speed;
     }
-    /* Wait for force landing */
-    else if (m_uav_state == 4){
-      /* Force landing requires uav has 25 frames in the exact center of target */
+    else if (m_uav_state == 4){ // wait to land in straight lane
+      // todo: depends on gps information
+
+    }
+    else if (m_uav_state == 5){ //start to land
+      if (uav_real_truck_pos[2] < m_uav_force_landing_height_upperbound + m_target_height){
+        ROS_INFO("[Change to state] Waiting force landing!!");
+        m_uav_state = 6;
+        m_uav_force_landing_cnt += 1;
+      }
+      else
+        landing_vel_z = m_uav_landing_constant_speed;
+    }
+    else if (m_uav_state == 6){ // wait for force landing
+      /* Force landing requires uav has several frames in the exact center of target */
       if (m_uav_force_landing_cnt > m_uav_force_landing_cnt_thresh){
         /* Using force landing trajectory requires this trajectory is newly estimated, which would guarantee good accuracy in near future. */
-        ROS_INFO("Prepare to force landing.");
-        m_uav_state = 5;
-        /* TODO: 20170312 force landing with same speed of truck */
-        if (m_uav_force_landing_method == 1){ //1, follow fixed truck velocity
+        ROS_INFO("[Change to state] Prepare to force landing.");
+        m_uav_state = 7; // start force landing
+        /* force landing with same speed of truck */
+        if (m_uav_force_landing_method == 1){ //method 1, follow fixed truck velocity
           tf::Vector3 truck_des_world_vel = vector3dToVector3(m_truck_traj.nOrderVehicleTrajectory(1, uav_current_traj_time));
           tf::Vector3 truck_des_uav_vel = r_z.inverse() * truck_des_world_vel;
-          m_uav_state = 6;
+          m_uav_state = 8; // since velocity in force landing is fixed in method 1, we could already view it in state 8: during force land. For method 2, it needs generate last trajectory to get into state 8.
           m_uav_cmd.linear.x = truck_des_uav_vel[0];
           m_uav_cmd.linear.y = truck_des_uav_vel[1];
           m_uav_cmd.linear.z = -1.5;
@@ -181,9 +189,9 @@ void QuadrotorCommand::trackTrajectory()
 }
 
 
-void QuadrotorCommand::trackGlobalTrajectory()
+void QuadrotorCommand::trackGlobalTrajectory() // for method 2
 {
-  if (m_uav_state == 7){
+  if (m_uav_state == 9){
     m_uav_cmd.linear.x = 0.0;
     m_uav_cmd.linear.y = 0.0;
     m_uav_cmd.linear.z = -1.5;
@@ -205,11 +213,11 @@ void QuadrotorCommand::trackGlobalTrajectory()
         std::cout << "tn: " << m_bspline_traj_ptr->m_tn << ", odom time: " << uav_current_traj_time << "\n";
       }
     uav_current_traj_time = m_bspline_traj_ptr->m_tn;
-    ROS_INFO("UAV should already land. ");
+    ROS_INFO("[Change to state] UAV should already land. ");
     m_uav_cmd.linear.x = 0.0;
     m_uav_cmd.linear.y = 0.0;
     m_uav_cmd.linear.z = -1.5;
-    m_uav_state = 7;
+    m_uav_state = 9;
     return;
   }
   tf::Vector3 uav_des_world_vel = vectorToVector3(m_bspline_traj_ptr->evaluateDerive(uav_current_traj_time));
@@ -262,7 +270,7 @@ bool QuadrotorCommand::uavMovingToPresetHeight(double height)
   }
   else{
     m_uav_state = 2;
-    ROS_INFO("UAV reached specific height.");
+    ROS_INFO("[Change to state] UAV reached specific height.");
     return true;
   }
   return false;

@@ -37,11 +37,12 @@ public:
   ros::Subscriber m_sub_truck_odom;
   ros::Subscriber m_sub_uav_start_flag;
   ros::Subscriber m_sub_uav_odom;
+  // 0314
+  ros::Subscriber m_sub_uav_straight_lane_landing_start_flag;
 
   /* Publisher */
   ros::Publisher m_pub_uav_cmd;
   ros::Publisher m_pub_reconstructed_path_markers;
-  //0313
   ros::Publisher m_pub_estimated_truck_odom;
 
 
@@ -117,6 +118,8 @@ public:
   /* uav */
   void uavStartFlagCallback(const std_msgs::Empty msg);
   void uavOdomCallback(const nav_msgs::OdometryConstPtr& msg);
+  // 0313
+  void uavStraightLaneLandingStartFlagCallback(const std_msgs::Empty msg);
 
   // test
   void uavRandomCheatOdom();
@@ -181,11 +184,13 @@ void TruckServerNode::onInit()
   m_sub_truck_odom = nh_.subscribe<nav_msgs::Odometry>(m_truck_odom_sub_topic_name, 1, &TruckServerNode::truckOdomCallback, this);
   m_sub_uav_odom = nh_.subscribe<nav_msgs::Odometry>(m_uav_odom_sub_topic_name, 1, &TruckServerNode::uavOdomCallback, this);
   m_sub_uav_start_flag = nh_.subscribe<std_msgs::Empty>("/uav_start_flag", 1, &TruckServerNode::uavStartFlagCallback, this);
+  // 0313
+  m_sub_uav_straight_lane_landing_start_flag = nh_.subscribe<std_msgs::Empty>("/uav_straight_lane_landing_start_flag", 1, &TruckServerNode::uavStraightLaneLandingStartFlagCallback, this);
+
 
   /* Publisher */
   m_pub_reconstructed_path_markers = nh_.advertise<visualization_msgs::MarkerArray>("reconstructed_path_markers", 1);
   m_pub_uav_cmd  = nh_.advertise<geometry_msgs::Twist>(m_uav_cmd_pub_topic_name, 1);
-  //0313
   m_pub_estimated_truck_odom = nh_.advertise<nav_msgs::Odometry>("truck_odom_estimated", 1);
 
 
@@ -218,8 +223,8 @@ void TruckServerNode::initIterativeSearching()
   m_landing_time = landing_time_xy;
   if (m_landing_mode){
     /* If not start force landing, do not consider the influence from height to landing time, */
-    if (m_uav.m_uav_state == 5){
-      double landing_time_z = (m_uav_odom.pose.pose.position.z - m_target_height) / abs(m_uav_force_landing_vel);
+    if (m_uav.m_uav_state == 7){ // for method 2, generate last trajectory to follow
+      double landing_time_z = (m_uav_odom.pose.pose.position.z - m_target_height) / abs(m_uav_force_landing_vel/2.0);
       // if result is 5.1 s, we will use 6.0s as the landing time
       if (landing_time_z > landing_time_xy)
         m_landing_time = landing_time_z;
@@ -232,16 +237,11 @@ void TruckServerNode::initIterativeSearching()
     m_landing_time = m_uav_landing_time_xy_upbound;
     m_n_segments = (int)(m_landing_time + 0.49);
   }
-  /* If landing time is less than 2.0s, then assume its bspline has 2 segments. */
+  /* If landing time is less than 2.0s, then assume its bspline has 2 segments. Because if each trajectory period time is too short, will make uav movment very unstable */
   else if (m_landing_time <= 2.0){
-    /* If landing time is too small, eg. less than 0.5s, then assume landing time is 0.5s */
-    // if (m_landing_time < 0.5)
-    //   m_landing_time = 0.5;
-
-    // 0312
-    if (m_uav.m_uav_state == 5){
-      if (m_landing_time < 0.5)
-        m_landing_time = 0.5;
+    if (m_uav.m_uav_state == 7){ // method 2, if last trajectory to follow is too short, it is also okay
+      // if (m_landing_time < 0.5) // make last trajectory at least 0.5s
+      //   m_landing_time = 0.5;
     }
     else
       m_landing_time = 2.0;
@@ -274,10 +274,6 @@ void TruckServerNode::initIterativeSearching()
       Vector3d(m_uav_odom.twist.twist.linear.x*m_segment_period_time/2.0,
                m_uav_odom.twist.twist.linear.y*m_segment_period_time/2.0,
                m_uav_odom.twist.twist.linear.z*m_segment_period_time/2.0);
-    // 0312: force make landing speed to be m_uav_force_landing_vel/2.0
-    // if (m_uav.m_uav_state == 5){
-    //   control_pt_1[2] = control_pt_0[2] + m_uav_force_landing_vel/2.0 * m_segment_period_time/2.0;
-    // }
 
     m_control_point_vec.push_back(control_pt_1);
     break;
@@ -308,13 +304,12 @@ void TruckServerNode::onIterativeSearching()
       control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, m_target_height);
     else
       control_pt_n = m_truck_traj_base.nOrderVehicleTrajectory(0, m_landing_time) + Vector3d(0.0, 0.0, (m_control_point_vec[0])[2]);
-    // todo: adding landing speed. Currently z-axis value is 0 in last triangle.
     control_pt_n_1 = control_pt_n - m_truck_traj_base.nOrderVehicleTrajectory(1, m_landing_time) * m_segment_period_time/2.0;
     control_pt_n_1[2] = control_pt_n[2] + abs(m_uav_landing_constant_vel) * m_segment_period_time/2.0;
-    if (m_uav.m_uav_state == 5){
+    if (m_uav.m_uav_state == 7){ // method 2, last point speed in z axis equal to force landing speed.
       control_pt_n_1[2] = m_target_height + abs(m_uav_force_landing_vel) * m_segment_period_time/2.0;
       /* force landing trajectory plan finished, change to during force land mode */
-      m_uav.m_uav_state = 6;
+      m_uav.m_uav_state = 8; // state 8: during force land
     }
     if (m_collision_detection_flag){
       TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
@@ -431,12 +426,12 @@ void TruckServerNode::vehicleCurrentPosVisualization(int vehicle_type)
 void TruckServerNode::truckTrajParamCallback(const quadrotor_trajectory::TrackParamStampedConstPtr& msg)
 {
   /* When in force landing state, do not update truck trajectory. */
-  if (m_uav.m_uav_state >= 6)
+  if (m_uav.m_uav_state == 8 || m_uav.m_uav_state == 9) // if its in during-force-land or finish-land states, do not need target trajectory any longer
     return;
 
   double cur_time = msg->header.stamp.toSec();
 
-  //0313
+  /* Publish estimated target position and velocity */
   int traj_order_1 = msg->params.layout.dim[0].size;
   std::vector<double> data_1;
   VehicleTrajectoryBase truck_traj_base_1;
@@ -454,8 +449,9 @@ void TruckServerNode::truckTrajParamCallback(const quadrotor_trajectory::TrackPa
   truck_odom_estimated.twist.twist.linear.z = truck_vel_1[2];
   m_pub_estimated_truck_odom.publish(truck_odom_estimated);
 
-
-  if (m_uav.m_uav_state == 5 || cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time){
+  /* Re-plan */
+  /* Conditions: 1, last plan already last more than threshold time; 2, method 2: need to get last trajectory to follow  */
+  if (m_uav.m_uav_state == 7 || cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time){
     m_global_planning_period_time = m_global_planning_period_default_time;
     m_vehicle_traj_recv_time = cur_time;
 
@@ -468,7 +464,7 @@ void TruckServerNode::truckTrajParamCallback(const quadrotor_trajectory::TrackPa
       m_truck_traj_base.printAll();
 
     /* run Iterative Searching */
-    if (m_uav.m_uav_state >= 3){ // 3, 4, or 5
+    if (m_uav.m_uav_state >= 3 && m_uav.m_uav_state <= 7){ // for states which needs planned trajectory
       runIterativeSearching();
 
       /* assign param to uav */
@@ -727,10 +723,16 @@ void TruckServerNode::uavStartFlagCallback(const std_msgs::Empty msg)
   m_uav.m_uav_state = 1;
 }
 
+void TruckServerNode::uavStraightLaneLandingStartFlagCallback(const std_msgs::Empty msg)
+{
+  m_uav.m_uav_state = 5; // state: start to land
+  ROS_INFO("[Change to state] Start to land!");
+}
+
 void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
   m_uav_odom = *msg;
-  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to move; 4, wait to land; 5, start force land; 6, during force land; 7, finish force land  */
+  /* state: 0, still; 1, taking off; 2, ready to move; 3, start to track; 4, wait to land; 5, start to land; 6, wait to force land; 7, start force land; 8, during force land; 9, finish force land */
   m_uav.getUavOdom(msg);
   if (m_uav.m_uav_state == 1){
     m_uav.uavMovingToPresetHeight(10.0);
@@ -741,15 +743,14 @@ void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
       m_uav.m_uav_state = 3;
     }
   }
-  // 0312
-  else if (m_uav.m_uav_state >= 6){ // 6 or 7
-    if (m_uav_force_landing_method == 2) // 2, follow fixed planned trajectory
+  else if (m_uav.m_uav_state >= 8){ // state: during or finish land
+    if (m_uav_force_landing_method == 2) // method 2, follow fixed planned trajectory
       m_uav.trackGlobalTrajectory();
     m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
   }
-  else if (m_uav.m_uav_state >= 3){ // 3, 4 or 5(just changed to start force land, trajectory not generated yet)
+  else if (m_uav.m_uav_state >= 3){ // track the planned trajectory
     /* In case traj not being calculated before state changes to 3 */
-    if (m_uav.m_traj_first_updated){
+    if (m_uav.m_traj_first_updated){ // in case odom topic comes before first trajectory topic
       m_uav.trackTrajectory();
       m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
     }
