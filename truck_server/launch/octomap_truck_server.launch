@@ -58,7 +58,7 @@
 
     <!-- restricted region -->
     <param name="restricted_region_mode" value="$(arg restricted_region)" />
-    <param name="restricted_region_radius" value="40.0" /> <!-- 40.0 -->
+    <param name="restricted_region_radius" value="38.0" /> <!-- 40.0 -->
   </node>
 
   <group if="$(arg debug)">
