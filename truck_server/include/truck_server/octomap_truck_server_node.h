@@ -98,6 +98,15 @@ public:
   double m_uav_force_landing_vel;
   int m_uav_force_landing_method;
 
+  /* restricted region */
+  bool m_restricted_region_mode;
+  bool m_restricted_region_recv_flag;
+  Vector3d m_restricted_region_center_pos;
+  double m_restricted_region_radius;
+  ros::Subscriber m_sub_restricted_region_center;
+  void restrictedRegionCenterCallback(const nav_msgs::OdometryConstPtr& msg);
+  void restrictedControlPoint(Vector3d& pt);
+
   void onInit();
 
   /* callback function */
@@ -145,6 +154,7 @@ void TruckServerNode::onInit()
   private_nh.param("debug_mode", m_debug_mode, false);
   private_nh.param("landing_mode", m_landing_mode, false);
   private_nh.param("gazebo_mode", m_gazebo_mode, false);
+
   private_nh.param("resolution", m_octomap_res, 0.1);
   private_nh.param("tree_depth", m_octomap_tree_depth, 16);
   private_nh.param("route_id", m_route_id, 1);
@@ -164,6 +174,9 @@ void TruckServerNode::onInit()
   private_nh.param("uav_landing_constant_speed", m_uav_landing_constant_vel, -0.4);
   private_nh.param("uav_force_landing_speed", m_uav_force_landing_vel, -1.0);
   private_nh.param("uav_force_landing_method", m_uav_force_landing_method, 1);
+  /* restricted region */
+  private_nh.param("restricted_region_mode", m_restricted_region_mode, true);
+  private_nh.param("restricted_region_radius", m_restricted_region_radius, 48.24);
 
   /* Init */
   m_uav.onInit();
@@ -177,6 +190,7 @@ void TruckServerNode::onInit()
   m_global_planning_period_time = m_global_planning_period_default_time;
   if (m_uav_direct_start_mode)
     m_uav.m_uav_state = 3; // in direct start mode, uav is ready to directly tracking.
+  m_restricted_region_recv_flag = false;
 
   /* Subscriber */
   m_sub_lane_marker_flag = nh_.subscribe<std_msgs::Empty>("/lane_marker_flag", 1, &TruckServerNode::laneMarkerCallback, this);
@@ -186,6 +200,7 @@ void TruckServerNode::onInit()
   m_sub_uav_start_flag = nh_.subscribe<std_msgs::Empty>("/uav_start_flag", 1, &TruckServerNode::uavStartFlagCallback, this);
   // 0313
   m_sub_uav_straight_lane_landing_start_flag = nh_.subscribe<std_msgs::Empty>("/uav_straight_lane_landing_start_flag", 1, &TruckServerNode::uavStraightLaneLandingStartFlagCallback, this);
+  m_sub_restricted_region_center = nh_.subscribe<nav_msgs::Odometry>("/restricted_region_center", 1, &TruckServerNode::restrictedRegionCenterCallback, this);
 
 
   /* Publisher */
@@ -243,8 +258,12 @@ void TruckServerNode::initIterativeSearching()
       // if (m_landing_time < 0.5) // make last trajectory at least 0.5s
       //   m_landing_time = 0.5;
     }
-    else
-      m_landing_time = 2.0;
+    else{
+      // 0314:
+      // m_landing_time = 2.0;
+      if (m_landing_time < 2 * m_global_planning_period_default_time)
+        m_landing_time = 2 * m_global_planning_period_default_time;
+    }
 
     m_n_total_segments = 2;
     m_n_segments = 2;
@@ -274,8 +293,10 @@ void TruckServerNode::initIterativeSearching()
       Vector3d(m_uav_odom.twist.twist.linear.x*m_segment_period_time/2.0,
                m_uav_odom.twist.twist.linear.y*m_segment_period_time/2.0,
                m_uav_odom.twist.twist.linear.z*m_segment_period_time/2.0);
-
+    if (m_restricted_region_mode && m_restricted_region_recv_flag)
+      restrictedControlPoint(control_pt_1);
     m_control_point_vec.push_back(control_pt_1);
+
     break;
   }
 }
@@ -291,6 +312,8 @@ void TruckServerNode::onIterativeSearching()
   for (int i = 1; i <= m_n_segments-2; ++i){
     Vector3d cur_control_pt;
     cur_control_pt = (m_control_point_vec[0] - target_cur_pt) / (m_n_total_segments-1) * (m_n_total_segments-1-i) + m_truck_traj_base.nOrderVehicleTrajectory(0, i*m_segment_period_time) + Vector3d(0.0, 0.0, target_cur_pt[2]);
+    if (m_restricted_region_mode && m_restricted_region_recv_flag)
+      restrictedControlPoint(cur_control_pt);
     m_control_point_vec.push_back(cur_control_pt);
   }
 
@@ -326,6 +349,10 @@ void TruckServerNode::onIterativeSearching()
       if (!getGridCenter(obstacle_ptr, control_pt_n_1, temp_3d, -1)){
         ROS_WARN("Control points n-1 could not use!! TODO work.");
       }
+    }
+    if (m_restricted_region_mode && m_restricted_region_recv_flag){
+      restrictedControlPoint(control_pt_n_1);
+      restrictedControlPoint(control_pt_n);
     }
     m_control_point_vec.push_back(control_pt_n_1);
     m_control_point_vec.push_back(control_pt_n);
@@ -757,4 +784,20 @@ void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
   }
 }
 
+void TruckServerNode::restrictedRegionCenterCallback(const nav_msgs::OdometryConstPtr& msg)
+{
+  m_restricted_region_recv_flag = true;
+  m_restricted_region_center_pos[0] = msg->pose.pose.position.x;
+  m_restricted_region_center_pos[1] = msg->pose.pose.position.y;
+  m_restricted_region_center_pos[2] = msg->pose.pose.position.z;
+}
+
+void TruckServerNode::restrictedControlPoint(Vector3d& pt)
+{
+  double disance_to_center = sqrt(pow(pt[0]-m_restricted_region_center_pos[0], 2.0) + pow(pt[1]-m_restricted_region_center_pos[1], 2.0));
+  if (disance_to_center > m_restricted_region_radius){
+    pt[0] = (pt[0]-m_restricted_region_center_pos[0]) * m_restricted_region_radius / disance_to_center + m_restricted_region_center_pos[0];
+    pt[1] = (pt[1]-m_restricted_region_center_pos[1]) * m_restricted_region_radius / disance_to_center + m_restricted_region_center_pos[1];
+  }
+}
 #endif
