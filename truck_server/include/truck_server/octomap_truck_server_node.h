@@ -98,6 +98,7 @@ public:
   double m_uav_landing_constant_vel;
   double m_uav_force_landing_vel;
   int m_uav_force_landing_method;
+  double m_uav_force_landing_start_time;
 
   /* restricted region */
   bool m_restricted_region_mode;
@@ -211,7 +212,8 @@ void TruckServerNode::onInit()
   m_pub_uav_cmd  = nh_.advertise<geometry_msgs::Twist>(m_uav_cmd_pub_topic_name, 1);
   m_pub_estimated_truck_odom = nh_.advertise<nav_msgs::Odometry>("truck_odom_estimated", 1);
 
-
+  // 0315
+  m_uav_force_landing_start_time = -1;
 
   ROS_INFO("onInit finished");
 }
@@ -779,9 +781,24 @@ void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
       m_uav.m_uav_state = 3;
     }
   }
-  else if (m_uav.m_uav_state >= 8){ // state: during or finish land
+  else if (m_uav.m_uav_state == 8){ // state: during land
     if (m_uav_force_landing_method == 2) // method 2, follow fixed planned trajectory
       m_uav.trackGlobalTrajectory();
+    else if (m_uav_force_landing_method == 1){
+      if (m_uav_force_landing_start_time < 0){ // not assigned value yet
+        m_uav_force_landing_start_time = msg->header.stamp.toSec();
+      }
+      else if (msg->header.stamp.toSec() - m_uav_force_landing_start_time > 0.6){ // 0.6s: roughly estimated from force landing height and force landing velocity
+        m_uav.m_uav_state = 9; // change to finish land state
+        ROS_INFO("[Change to state] Finish landing.");
+      }
+    }
+    m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
+  }
+  else if (m_uav.m_uav_state == 9){ // state: finish land
+    m_uav.m_uav_cmd.linear.x = 0.0;
+    m_uav.m_uav_cmd.linear.y = 0.0;
+    m_uav.m_uav_cmd.linear.z = -0.5;
     m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
   }
   else if (m_uav.m_uav_state >= 3){ // track the planned trajectory
