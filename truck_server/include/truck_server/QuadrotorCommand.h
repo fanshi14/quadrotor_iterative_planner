@@ -56,7 +56,8 @@ public:
   int m_uav_state;
   nav_msgs::Odometry m_uav_odom;
   geometry_msgs::Twist m_uav_cmd;
-  int m_uav_going_down_cnt;
+  int m_uav_start_landing_cnt;
+  int m_uav_start_landing_cnt_thresh;
   int m_uav_force_landing_cnt;
   double m_uav_tracking_landing_constant_speed;
   double m_uav_landing_constant_speed;

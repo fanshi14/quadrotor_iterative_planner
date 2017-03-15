@@ -26,6 +26,7 @@ void QuadrotorCommand::onInit()
   private_nh.param("uav_landing_constant_speed", m_uav_landing_constant_speed, -1.0);
   private_nh.param("uav_start_landing_height_upperbound", m_uav_start_landing_height_upperbound, 5.0);
   private_nh.param("uav_force_landing_height_upperbound", m_uav_force_landing_height_upperbound, 0.4);
+  private_nh.param("uav_start_landing_cnt_thresh", m_uav_start_landing_cnt_thresh, 5);
   private_nh.param("uav_force_landing_cnt_thresh", m_uav_force_landing_cnt_thresh, 5);
   private_nh.param("uav_force_landing_method", m_uav_force_landing_method, 1);
 
@@ -45,7 +46,7 @@ void QuadrotorCommand::onInit()
   /* state: 0, still; 1, taking off; 2, ready to move; 3, start to track; 4, wait to land; 5, start to land; 6, wait to force land; 7, start force land; 8, during force land; 9, finish force land */
   m_uav_state = 0;
 
-  m_uav_going_down_cnt = 0;
+  m_uav_start_landing_cnt = 0;
   m_uav_force_landing_cnt = 0;
 
   sleep(0.2); //To collect initial values for truck and uav odom, which will be used in following functions
@@ -163,8 +164,14 @@ void QuadrotorCommand::trackTrajectory()
         m_uav_state = 6;
         m_uav_force_landing_cnt += 1;
       }
-      else
-        landing_vel_z = m_uav_landing_constant_speed;
+      else{
+        if (m_uav_start_landing_cnt > m_uav_start_landing_cnt_thresh)
+          landing_vel_z = m_uav_landing_constant_speed;
+        else{
+          if (target_distance_xy < 1.8)
+            m_uav_start_landing_cnt += 1;
+        }
+      }
     }
     else if (m_uav_state == 6){ // wait for force landing
       /* Force landing requires uav has several frames in the exact center of target */
