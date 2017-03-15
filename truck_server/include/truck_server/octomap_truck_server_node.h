@@ -39,6 +39,7 @@ public:
   ros::Subscriber m_sub_uav_odom;
   // 0314
   ros::Subscriber m_sub_uav_straight_lane_landing_start_flag;
+  ros::Subscriber m_sub_uav_arrive_gps_point_flag;
 
   /* Publisher */
   ros::Publisher m_pub_uav_cmd;
@@ -129,6 +130,7 @@ public:
   void uavOdomCallback(const nav_msgs::OdometryConstPtr& msg);
   // 0313
   void uavStraightLaneLandingStartFlagCallback(const std_msgs::Empty msg);
+  void uavArriveGpsPointFlagCallback(const std_msgs::Empty msg);
 
   // test
   void uavRandomCheatOdom();
@@ -201,6 +203,7 @@ void TruckServerNode::onInit()
   // 0313
   m_sub_uav_straight_lane_landing_start_flag = nh_.subscribe<std_msgs::Empty>("/uav_straight_lane_landing_start_flag", 1, &TruckServerNode::uavStraightLaneLandingStartFlagCallback, this);
   m_sub_restricted_region_center = nh_.subscribe<nav_msgs::Odometry>("/restricted_region_center", 1, &TruckServerNode::restrictedRegionCenterCallback, this);
+  m_sub_uav_arrive_gps_point_flag = nh_.subscribe<std_msgs::Empty>("/task1_arrive_gps_point", 1, &TruckServerNode::uavArriveGpsPointFlagCallback, this);
 
 
   /* Publisher */
@@ -756,6 +759,12 @@ void TruckServerNode::uavStraightLaneLandingStartFlagCallback(const std_msgs::Em
   ROS_INFO("[Change to state] Start to land!");
 }
 
+void TruckServerNode::uavArriveGpsPointFlagCallback(const std_msgs::Empty msg)
+{
+  m_uav.m_uav_arrive_gps_point_flag = true;
+  ROS_INFO("[Change to state] State enable. Arrive to gps pt!");
+}
+
 void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
 {
   m_uav_odom = *msg;
@@ -777,7 +786,8 @@ void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
   }
   else if (m_uav.m_uav_state >= 3){ // track the planned trajectory
     /* In case traj not being calculated before state changes to 3 */
-    if (m_uav.m_traj_first_updated){ // in case odom topic comes before first trajectory topic
+    /* uav_arrive_gps_point_flag comes, then state changes could be enabled */
+    if (m_uav.m_traj_first_updated && m_uav.m_uav_arrive_gps_point_flag){ // in case odom topic comes before first trajectory topic
       m_uav.trackTrajectory();
       m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
     }

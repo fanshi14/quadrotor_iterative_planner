@@ -37,6 +37,7 @@ void QuadrotorCommand::onInit()
   m_uav_yaw_i_term_accumulation = 0.0;
   m_traj_updated = false;
   m_traj_first_updated = false;
+  m_uav_arrive_gps_point_flag = false;
 
   m_uav_cmd.linear.x = 0.0; m_uav_cmd.linear.y = 0.0; m_uav_cmd.linear.z = 0.0;
   m_uav_cmd.angular.x = 0.0; m_uav_cmd.angular.y = 0.0; m_uav_cmd.angular.z = 0.0;

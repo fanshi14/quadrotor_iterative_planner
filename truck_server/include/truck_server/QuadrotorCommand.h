@@ -64,6 +64,7 @@ public:
   double m_uav_force_landing_height_upperbound;
   int m_uav_force_landing_cnt_thresh;
   int m_uav_force_landing_method;
+  bool m_uav_arrive_gps_point_flag;
 
   // pid
   double m_traj_track_p_gain;
