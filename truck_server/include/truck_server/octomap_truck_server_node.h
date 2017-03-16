@@ -200,7 +200,7 @@ void TruckServerNode::onInit()
   m_sub_truck_traj_param = nh_.subscribe<quadrotor_trajectory::TrackParamStamped>("/truck_traj_param", 1, &TruckServerNode::truckTrajParamCallback, this);
   m_sub_truck_odom = nh_.subscribe<nav_msgs::Odometry>(m_truck_odom_sub_topic_name, 1, &TruckServerNode::truckOdomCallback, this);
   m_sub_uav_odom = nh_.subscribe<nav_msgs::Odometry>(m_uav_odom_sub_topic_name, 1, &TruckServerNode::uavOdomCallback, this);
-  m_sub_uav_start_flag = nh_.subscribe<std_msgs::Empty>("/uav_start_flag", 1, &TruckServerNode::uavStartFlagCallback, this);
+  m_sub_uav_start_flag = nh_.subscribe<std_msgs::Empty>("/simulator_uav_start_flag", 1, &TruckServerNode::uavStartFlagCallback, this);
   // 0313
   m_sub_uav_straight_lane_landing_start_flag = nh_.subscribe<std_msgs::Empty>("/uav_straight_lane_landing_start_flag", 1, &TruckServerNode::uavStraightLaneLandingStartFlagCallback, this);
   m_sub_restricted_region_center = nh_.subscribe<nav_msgs::Odometry>("/restricted_region_center", 1, &TruckServerNode::restrictedRegionCenterCallback, this);
