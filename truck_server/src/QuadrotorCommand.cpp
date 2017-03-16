@@ -26,7 +26,7 @@ void QuadrotorCommand::onInit()
   private_nh.param("uav_landing_constant_speed", m_uav_landing_constant_speed, -1.0);
   private_nh.param("uav_start_landing_height_upperbound", m_uav_start_landing_height_upperbound, 5.0);
   private_nh.param("uav_force_landing_height_upperbound", m_uav_force_landing_height_upperbound, 0.4);
-  private_nh.param("uav_start_landing_cnt_thresh", m_uav_start_landing_cnt_thresh, 5);
+  private_nh.param("uav_start_landing_cnt_thresh", m_uav_start_landing_cnt_thresh, 0);
   private_nh.param("uav_force_landing_cnt_thresh", m_uav_force_landing_cnt_thresh, 5);
   private_nh.param("uav_force_landing_method", m_uav_force_landing_method, 1);
 
@@ -168,7 +168,7 @@ void QuadrotorCommand::trackTrajectory()
         if (m_uav_start_landing_cnt > m_uav_start_landing_cnt_thresh)
           landing_vel_z = m_uav_landing_constant_speed;
         else{
-          if (target_distance_xy < 1.8)
+          if (target_distance_xy < 2.5)
             m_uav_start_landing_cnt += 1;
         }
       }

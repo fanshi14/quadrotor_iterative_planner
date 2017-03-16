@@ -52,14 +52,14 @@
     <param name="uav_tracking_landing_constant_speed"  value="-0.5" />
     <param name="uav_landing_constant_speed"  value="-1.0" />
     <param name="uav_force_landing_speed"  value="-1.0" />
-    <param name="uav_start_landing_height_upperbound"  value="5.0" />
+    <param name="uav_start_landing_height_upperbound"  value="4.2" />
     <param name="uav_force_landing_height_upperbound"  value="0.2" />
     <param name="uav_force_landing_cnt_thresh"  value="5" />
     <param name="uav_force_landing_method"  value="1" /> <!-- 1, follow fixed truck velocity 2, follow fixed planned trajectory -->
 
     <!-- restricted region -->
     <param name="restricted_region_mode" value="$(arg restricted_region)" />
-    <param name="restricted_region_radius" value="38.3" /> <!-- 40.0 -->
+    <param name="restricted_region_radius" value="38" /> <!-- 40.0 -->
   </node>
 
   <group if="$(arg debug)">
