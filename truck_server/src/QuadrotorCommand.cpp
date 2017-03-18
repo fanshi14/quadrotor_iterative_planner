@@ -168,7 +168,7 @@ void QuadrotorCommand::trackTrajectory()
         if (m_uav_start_landing_cnt > m_uav_start_landing_cnt_thresh)
           landing_vel_z = m_uav_landing_constant_speed;
         else{
-          if (target_distance_xy < 2.5)
+          if (target_distance_xy < 2.0)
             m_uav_start_landing_cnt += 1;
         }
       }

@@ -788,7 +788,7 @@ void TruckServerNode::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
       if (m_uav_force_landing_start_time < 0){ // not assigned value yet
         m_uav_force_landing_start_time = msg->header.stamp.toSec();
       }
-      else if (msg->header.stamp.toSec() - m_uav_force_landing_start_time > 0.6){ // 0.6s: roughly estimated from force landing height and force landing velocity
+      else if (msg->header.stamp.toSec() - m_uav_force_landing_start_time > 1.5){ // 1.5s: roughly estimated from force landing height and force landing velocity
         m_uav.m_uav_state = 9; // change to finish land state
         ROS_INFO("[Change to state] Finish landing.");
       }
