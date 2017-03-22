@@ -48,10 +48,10 @@ public:
   tf::Vector3 m_uav_world_pos;
   tf::Vector3 m_uav_world_vel;
   tf::Vector3 m_uav_world_acc;
-  tf::Vector3 m_truck_world_pos;
-  tf::Vector3 m_uav_truck_world_pos;
+  tf::Vector3 m_target_world_pos;
+  tf::Vector3 m_uav_target_world_pos;
   tf::Quaternion m_uav_q;
-  nav_msgs::Odometry m_truck_odom;
+  nav_msgs::Odometry m_target_odom;
   /* state: 0, still; 1, taking off; 2, ready to move; 3, start to track; 4, wait to land; 5, start to land; 6, wait to force land; 7, start force land;  8, during force land; 9, finish force land */
   int m_uav_state;
   nav_msgs::Odometry m_uav_odom;
@@ -83,7 +83,7 @@ public:
   bool m_traj_updated;
   bool m_traj_first_updated;
   double m_traj_updated_time;
-  VehicleTrajectoryBase m_truck_traj;
+  VehicleTrajectoryBase m_target_traj;
 
   /* Publisher */
   ros::Publisher m_pub_uav_gliding_mode;
@@ -92,12 +92,12 @@ public:
   std::string m_uav_gliding_mode_pub_topic_name;
 
   void onInit();
-  void getTruckOdom(const nav_msgs::OdometryConstPtr& truck_odom_msg);
+  void getTargetOdom(const nav_msgs::OdometryConstPtr& target_odom_msg);
   void getUavOdom(const nav_msgs::OdometryConstPtr& uav_odom_msg);
   void trackTrajectory();
   void trackGlobalTrajectory();
-  double uavTruckHorizonDistance();
-  void updateUavTruckRelPos();
+  double uavTargetHorizonDistance();
+  void updateUavTargetRelPos();
   void trajectoryTracking(Vector3d uav_des_pos, Vector3d uav_des_vel);
   bool uavMovingToPresetHeight(double height);
   inline tf::Vector3 vectorToVector3(std::vector<double> vec);

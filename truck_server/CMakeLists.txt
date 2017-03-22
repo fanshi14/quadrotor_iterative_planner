@@ -67,11 +67,11 @@ set(LINK_LIBS
   #DEPENDS Eigen
 )
 
-add_library(${PROJECT_NAME} src/TruckOctomapServer.cpp src/QuadrotorCommand.cpp)
+add_library(${PROJECT_NAME} src/TruckOctomapServer.cpp src/QuadrotorCommand.cpp src/IterativePlanner.cpp)
 target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
-add_executable(octomap_truck_server_node src/octomap_truck_server_node.cpp)
-target_link_libraries(octomap_truck_server_node
+add_executable(target_tracking_node src/target_tracking_node.cpp)
+target_link_libraries(target_tracking_node
   ## tinyspline
   /home/shi/ros/shi_catkin_ws/build/bspline_ros/bspline/tinyspline/build/lib/libtinysplinecpp.so
   #${PROJECT_BINARY_DIR}/bspline/tinyspline/build/lib/libtinysplinecpp.so
@@ -87,7 +87,7 @@ target_link_libraries(uav_teleop_keyboard ${PROJECT_NAME} ${LINK_LIBS})
 
 # install targets:
 install(TARGETS ${PROJECT_NAME}
-  octomap_truck_server_node
+  target_tracking_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

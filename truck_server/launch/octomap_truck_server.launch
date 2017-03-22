@@ -13,7 +13,7 @@
   <arg name="x" default="-10.0"/>
   <arg name="y" default="-30.0"/>
 
-  <node pkg="truck_server" type="octomap_truck_server_node" name="octomap_talker" output="screen">
+  <node pkg="truck_server" type="target_tracking_node" name="target_tracking" output="screen">
     <param name="debug_mode" value="$(arg debug)" />
     <param name="dji_mode" value="$(arg dji)" />
     <param name="landing_mode" value="$(arg landing)" />
@@ -27,8 +27,8 @@
     <param name="trajectory_function_print_flag" value="false" />
 
     <!-- track or circle -->
-    <param name="truck_odom_sub_topic_name" type="string" value="/truck_odom" unless="$(arg dji)" />
-    <param name="truck_odom_sub_topic_name" type="string" value="/object/global/odom" if="$(arg dji)" />
+    <param name="target_odom_sub_topic_name" type="string" value="/truck_odom" unless="$(arg dji)" />
+    <param name="target_odom_sub_topic_name" type="string" value="/object/global/odom" if="$(arg dji)" />
     <param name="route_radius" value="$(arg radius)" />
     <param name="target_height" value="1.8" /> <!-- 1.8 -->
 
