@@ -1,5 +1,5 @@
 
-#include <truck_server/QuadrotorCommand.h>
+#include <iterative_planner_server/QuadrotorCommand.h>
 
 QuadrotorCommand::QuadrotorCommand() {}
 void QuadrotorCommand::onInit()

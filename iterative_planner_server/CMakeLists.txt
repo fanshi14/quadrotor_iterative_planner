@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(truck_server)
+project(iterative_planner_server)
 
 set(PACKAGE_DEPENDENCIES
   roscpp
@@ -67,7 +67,7 @@ set(LINK_LIBS
   #DEPENDS Eigen
 )
 
-add_library(${PROJECT_NAME} src/TruckOctomapServer.cpp src/QuadrotorCommand.cpp src/IterativePlanner.cpp)
+add_library(${PROJECT_NAME} src/VehicleOctomapServer.cpp src/QuadrotorCommand.cpp src/IterativePlanner.cpp)
 target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
 add_executable(target_tracking_node src/target_tracking_node.cpp)

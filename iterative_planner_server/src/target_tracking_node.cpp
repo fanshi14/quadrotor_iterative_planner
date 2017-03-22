@@ -1,4 +1,4 @@
-#include <truck_server/IterativePlanner.h>
+#include <iterative_planner_server/IterativePlanner.h>
 using namespace octomap_server;
 
 int main(int argc, char** argv)

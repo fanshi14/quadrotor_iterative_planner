@@ -1,5 +1,5 @@
 <package>
-  <name>truck_server</name>
+  <name>iterative_planner_server</name>
   <version>0.6.0</version>
   <description>
     truck model
@@ -7,7 +7,7 @@
   <author>Fan Shi</author>
   <maintainer email="shi@jsk.imi.i.u-tokyo.ac.jp">Fan Shi</maintainer>
   <license>BSD</license>
-  <url>https://github.com/KahnShi/octomap_truck</url>
+  <url>https://github.com/KahnShi/quadrotor_iterative_planner</url>
 
   <buildtool_depend>catkin</buildtool_depend>
 

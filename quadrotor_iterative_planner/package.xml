@@ -1,5 +1,5 @@
 <package>
-  <name>octomap_truck</name>
+  <name>quadrotor_iterative_planner</name>
   <version>0.6.0</version>
   <description>
     3D representation tools for truck, implementing a 3D occupancy grid mapping.
@@ -9,7 +9,7 @@
   <license>BSD</license>
 
   <buildtool_depend>catkin</buildtool_depend>
-  <run_depend>truck_server</run_depend>
+  <run_depend>iterative_planner_server</run_depend>
 
   <export>
     <metapackage/>

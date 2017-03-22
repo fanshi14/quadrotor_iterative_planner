@@ -2,7 +2,7 @@
 #define ITERATIVE_PLANNER_H_
 
 #include <ros/ros.h>
-#include <truck_server/TruckOctomapServer.h>
+#include <iterative_planner_server/VehicleOctomapServer.h>
 #include <unistd.h>
 #include <geometry_msgs/Vector3.h>
 #include <geometry_msgs/Point.h>
@@ -20,8 +20,8 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <quadrotor_trajectory/VehicleTrajectoryBase.h>
-#include <truck_server/QuadrotorCommand.h>
-// Already defined in truck_server/QuadrotorCommand.h
+#include <iterative_planner_server/QuadrotorCommand.h>
+// Already defined in iterative_planner_server/QuadrotorCommand.h
 // #include <bspline_ros/bsplineGenerate.h>
 
 using namespace octomap_server;
@@ -67,7 +67,7 @@ public:
   nav_msgs::Odometry m_target_odom;
   std::string m_target_odom_sub_topic_name;
   VehicleTrajectoryBase m_target_traj_base;
-  TruckOctomapServer* m_target_ptr;
+  VehicleOctomapServer* m_target_ptr;
   bool m_target_traj_param_print_flag;
 
   /* bspline generator */
@@ -76,7 +76,7 @@ public:
   std::string m_spline_path_pub_topic_name;
 
   /* iterative searching */
-  std::vector<TruckOctomapServer*> m_object_seg_ptr_vec;
+  std::vector<VehicleOctomapServer*> m_object_seg_ptr_vec;
   int m_n_segments;
   int m_n_total_segments;
   double m_landing_time;
@@ -120,7 +120,7 @@ public:
   bool isInsideBoarder(Vector3d query_point);
   bool getGridCenter(point3d query_point, point3d& center_point, int depth);
   bool getGridCenter(Vector3d query_point, Vector3d& center_point, int depth);
-  bool getGridCenter(TruckOctomapServer* obstacle_ptr, Vector3d query_point, Vector3d& center_point, int depth);
+  bool getGridCenter(VehicleOctomapServer* obstacle_ptr, Vector3d query_point, Vector3d& center_point, int depth);
   inline void vector3dConvertToPoint32(Vector3d point3, geometry_msgs::Point32& point32);
   inline void vector3dConvertToPoint(Vector3d point3, geometry_msgs::Point& point32);
 

@@ -1,5 +1,5 @@
 
-#include <truck_server/IterativePlanner.h>
+#include <iterative_planner_server/IterativePlanner.h>
 
 void IterativePlanner::onInit()
 {
@@ -39,7 +39,7 @@ void IterativePlanner::onInit()
   m_uav.onInit();
   m_bspline_generator.onInit(m_spline_degree, true, m_spline_path_pub_topic_name);
   if (m_collision_detection_flag || m_gazebo_mode){
-    m_target_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth);
+    m_target_ptr = new VehicleOctomapServer(m_octomap_res, m_octomap_tree_depth);
   }
   m_octomap_boarder_val = m_octomap_res * pow(2, m_octomap_tree_depth-1);
   m_vehicles_visualize_prev_time = ros::Time().now().toSec();
@@ -138,7 +138,7 @@ void IterativePlanner::initIterativeSearching()
   // Set second control point: P1 = P0 + v * Tp / 2
   while(1){
     if (m_collision_detection_flag){
-      TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
+      VehicleOctomapServer* obstacle_ptr = new VehicleOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
       /* Add obstacle of inner and outter cars, and static obstacles like bridge */
       // updateObstacleOctomap(obstacle_ptr, 0);
       // todo: collision detection
@@ -190,7 +190,7 @@ void IterativePlanner::onIterativeSearching()
       m_uav.m_uav_state = 8; // state 8: during force land
     }
     if (m_collision_detection_flag){
-      TruckOctomapServer* obstacle_ptr = new TruckOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
+      VehicleOctomapServer* obstacle_ptr = new VehicleOctomapServer(m_octomap_res, m_octomap_tree_depth, false);
       /* Add obstacle of inner and outter cars, and static obstacles like bridge */
       // updateObstacleOctomap(obstacle_ptr, m_landing_time-m_segment_period_time);
       Vector3d temp_3d;
@@ -479,7 +479,7 @@ bool IterativePlanner::isInsideBoarder(point3d query_point)
     return true;
 }
 
-bool IterativePlanner::getGridCenter(TruckOctomapServer* obstacle_ptr, Vector3d query_point, Vector3d& center_point, int depth)
+bool IterativePlanner::getGridCenter(VehicleOctomapServer* obstacle_ptr, Vector3d query_point, Vector3d& center_point, int depth)
 {
   bool isGridFree = true;
 
@@ -594,7 +594,7 @@ void IterativePlanner::targetOdomCallback(const nav_msgs::OdometryConstPtr& msg)
     if (cur_time - m_vehicles_visualize_prev_time > m_vehicles_visualize_period_time){
       m_vehicles_visualize_prev_time = cur_time;
       vehicleCurrentPosVisualization(0);
-      m_target_ptr->publishTruckAll(ros::Time().now());
+      m_target_ptr->publishVehicleAll(ros::Time().now());
       m_target_ptr->m_octree->clear();
     }
   }

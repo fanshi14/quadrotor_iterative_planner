@@ -1,12 +1,12 @@
 
-#include <truck_server/TruckOctomapServer.h>
+#include <iterative_planner_server/VehicleOctomapServer.h>
 #include <string>
 
 using namespace octomap;
 using namespace octomath;
 using namespace octomap_server;
 
-TruckOctomapServer::TruckOctomapServer(double resolution, int tree_depth) :
+VehicleOctomapServer::VehicleOctomapServer(double resolution, int tree_depth) :
   OctomapServer(resolution, tree_depth)
 {
 
@@ -23,15 +23,15 @@ TruckOctomapServer::TruckOctomapServer(double resolution, int tree_depth) :
 }
 
 
-TruckOctomapServer::TruckOctomapServer(double resolution, int tree_depth, bool is_publish_topic) :
+VehicleOctomapServer::VehicleOctomapServer(double resolution, int tree_depth, bool is_publish_topic) :
   OctomapServer(resolution, tree_depth, is_publish_topic)
 {
   //init_param();
 }
 
-TruckOctomapServer::~TruckOctomapServer() {}
+VehicleOctomapServer::~VehicleOctomapServer() {}
 
-void TruckOctomapServer::init_param()
+void VehicleOctomapServer::init_param()
 {
   // Shi
   //m_octree->setResolution(m_res);
@@ -47,19 +47,19 @@ void TruckOctomapServer::init_param()
 }
 
 
-void TruckOctomapServer::publishTruckFullOctoMap(const ros::Time& rostime)
+void VehicleOctomapServer::publishVehicleFullOctoMap(const ros::Time& rostime)
 {
   OctomapServer *b = this;
   this->publishFullOctoMap(rostime);
 }
 
-void TruckOctomapServer::publishTruckAll(const ros::Time& rostime)
+void VehicleOctomapServer::publishVehicleAll(const ros::Time& rostime)
 {
   OctomapServer *b = this;
   this->publishAll(rostime);
 }
 
-void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
+void VehicleOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
 {
   int roof[3], base[3], cargo[3];
   float roof_offset[3], base_offset[3], cargo_offset[3];
@@ -183,7 +183,7 @@ void TruckOctomapServer::WriteVehicleOctree(int type, Pose6D rot_mat)
 }
 
 
-void TruckOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
+void VehicleOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
 {
   int roof[3], base[3], cargo[3];
   int roof_origin[3], base_origin[3], cargo_origin[3];
@@ -307,7 +307,7 @@ void TruckOctomapServer::WriteUavSafeBorderOctree(int type, Pose6D rot_mat)
 }
 
 
-void TruckOctomapServer::WriteObstacleOctree(int type, Pose6D rot_mat)
+void VehicleOctomapServer::WriteObstacleOctree(int type, Pose6D rot_mat)
 {
   int roof[3], base[3];
   float roof_offset[3], base_offset1[3], base_offset2[3];
@@ -390,7 +390,7 @@ void TruckOctomapServer::WriteObstacleOctree(int type, Pose6D rot_mat)
 }
 
 
-void TruckOctomapServer::laneMarkerVisualization()
+void VehicleOctomapServer::laneMarkerVisualization()
 {
   visualization_msgs::Marker lane_strip_marker;
   lane_strip_marker.ns = "lanes";
@@ -432,7 +432,7 @@ void TruckOctomapServer::laneMarkerVisualization()
   m_pub_lane_marker.publish(lane_strip_marker);
 }
 
-void TruckOctomapServer::crossLaneMarkerVisualization()
+void VehicleOctomapServer::crossLaneMarkerVisualization()
 {
   visualization_msgs::Marker lane_strip_marker;
   lane_strip_marker.ns = "lanes";
