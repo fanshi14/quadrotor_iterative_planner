@@ -13,7 +13,7 @@
   <arg name="x" default="-10.0"/>
   <arg name="y" default="-30.0"/>
 
-  <node pkg="truck_server" type="target_tracking_node" name="target_tracking" output="screen">
+  <node pkg="iterative_planner_server" type="target_tracking_node" name="target_tracking" output="screen">
     <param name="debug_mode" value="$(arg debug)" />
     <param name="dji_mode" value="$(arg dji)" />
     <param name="landing_mode" value="$(arg landing)" />
@@ -63,11 +63,11 @@
   </node>
 
   <group if="$(arg debug)">
-    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find truck_server)/config/truck_octomap.rviz" />
-    <node pkg="truck_server" type="lane_marker_flag.py" name="lane_marker_flag" />
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find iterative_planner_server)/config/truck_octomap.rviz" />
+    <node pkg="iterative_planner_server" type="lane_marker_flag.py" name="lane_marker_flag" />
     <group unless="$(arg dji)">
       <!-- publish pre-set cars odometry -->
-      <node pkg="truck_server" type="sim_cars_poses_pub.py" name="sim_cars_poses_pub" output="screen">
+      <node pkg="iterative_planner_server" type="sim_cars_poses_pub.py" name="sim_cars_poses_pub" output="screen">
         <param name="route_id" value="$(arg route_id)" />
         <param name="route_radius" value="$(arg radius)" />
         <param name="truck_vel" value="4.17" />
@@ -79,7 +79,7 @@
   <!--
       <group unless="$(arg debug)">
       <group if="$(arg dji)">
-      <node pkg="truck_server" type="dji_uav_commander.py" name="dji_uav_commander" output="screen">
+      <node pkg="iterative_planner_server" type="dji_uav_commander.py" name="dji_uav_commander" output="screen">
       <param name="global_coordinate_control_mode" value="false" />
       <param name="control_velocity_sub_topic_name" value="/cmd_vel" />
       </node>
@@ -140,7 +140,7 @@
         <arg name="y" value="$(arg y)"/>
         <arg name="z" value="0.5"/>
       </include>
-      <node pkg="truck_server" type="uav_teleop_keyboard" name="uav_teleop_keyboard"
+      <node pkg="iterative_planner_server" type="uav_teleop_keyboard" name="uav_teleop_keyboard"
             launch-prefix="xterm -e">
         <param name="teleopUGV" value="false"/>
         <remap from="teleopUGV" to="uav_teleop_keyboard/teleopUGV"/>
