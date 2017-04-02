@@ -27,6 +27,7 @@ void IterativePlanner::onInit()
   private_nh.param("uav_odom_sub_topic_name", m_uav_odom_sub_topic_name, (std::string)"/ground_truth/state");
   private_nh.param("uav_cmd_pub_topic_name", m_uav_cmd_pub_topic_name, (std::string)"/cmd_vel");
   private_nh.param("uav_direct_start_mode", m_uav_direct_start_mode, true);
+  private_nh.param("target_traj_deviation_threshold", m_target_traj_deviation_threshold, 1.0);
   private_nh.param("trajectory_function_print_flag", m_target_traj_param_print_flag, true);
   private_nh.param("uav_landing_constant_speed", m_uav_landing_constant_vel, -0.4);
   private_nh.param("uav_force_landing_speed", m_uav_force_landing_vel, -1.0);
@@ -332,8 +333,15 @@ void IterativePlanner::targetTrajParamCallback(const quadrotor_trajectory::Track
   m_pub_estimated_target_odom.publish(target_odom_estimated);
 
   /* Re-plan */
-  /* Conditions: 1, last plan already last more than threshold time; 2, method 2: need to get last trajectory to follow  */
-  if (m_uav.m_uav_state == 7 || cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time){
+  /* Conditions: 1, last plan already last more than threshold time; 2, method 2: need to get last trajectory to follow; 3, estimated trajectory is unreliable with time incresing  */
+  bool is_estimated_traj_unreliable;
+  /* If m_target_traj_base is not assigned value yet */
+  if(!m_target_traj_base.m_init_flag)
+    is_estimated_traj_unreliable = true;
+  else
+    is_estimated_traj_unreliable = m_target_traj_base.isVehicleDeviateTrajectory(m_target_traj_deviation_threshold, m_target_odom.pose.pose.position, cur_time - m_vehicle_traj_recv_time);
+
+  if (m_uav.m_uav_state == 7 || cur_time - m_vehicle_traj_recv_time > m_global_planning_period_time || is_estimated_traj_unreliable){
     m_global_planning_period_time = m_global_planning_period_default_time;
     m_vehicle_traj_recv_time = cur_time;
 

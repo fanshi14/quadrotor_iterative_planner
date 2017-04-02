@@ -69,6 +69,7 @@ public:
   VehicleTrajectoryBase m_target_traj_base;
   VehicleOctomapServer* m_target_ptr;
   bool m_target_traj_param_print_flag;
+  double m_target_traj_deviation_threshold;
 
   /* bspline generator */
   bsplineGenerate m_bspline_generator;
