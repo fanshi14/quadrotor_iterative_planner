@@ -38,8 +38,6 @@ include_directories(
   ${Eigen_INCLUDE_DIRS}
 )
 
-set(CMAKE_CXX_FLAGS "-std=c++11")
-
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
