@@ -75,8 +75,7 @@ void IterativePlanner::initIterativeSearching()
 {
   /* Clear previous vector data, marker, octree data */
   if (!m_control_point_vec.empty()){
-    if (m_gazebo_mode)
-      controlPolygonDisplay(0);
+    controlPolygonDisplay(0);
     m_control_point_vec.clear();
   }
 
@@ -241,8 +240,7 @@ void IterativePlanner::runIterativeSearching()
   //controlPtsRandomSet();
 
   /* publish control points */
-  if (m_gazebo_mode)
-    controlPolygonDisplay(1);
+  controlPolygonDisplay(1);
 
   //ROS_INFO("Iterative searching is finished.");
 
