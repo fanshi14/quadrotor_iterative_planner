@@ -24,7 +24,7 @@
     <param name="tree_depth" value="10" />
     <param name="frame_id" type="string" value="world" />
     <param name="spline_degree" value="2" />
-    <param name="global_planning_period_time" value="0.75" />
+    <param name="global_planning_period_time" value="1.0" />
     <param name="trajectory_function_print_flag" value="false" />
 
     <!-- track or circle -->
@@ -54,6 +54,7 @@
     <param name="uav_landing_constant_speed"  value="-1.0" />
     <param name="uav_force_landing_speed"  value="-1.0" />
     <param name="uav_start_landing_height_upperbound"  value="4.2" />
+    <param name="uav_start_landing_cnt_thresh"  value="0" />
     <param name="uav_force_landing_height_upperbound"  value="0.2" />
     <param name="uav_force_landing_cnt_thresh"  value="5" />
     <param name="uav_force_landing_method"  value="1" /> <!-- 1, follow fixed truck velocity 2, follow fixed planned trajectory -->
@@ -134,7 +135,7 @@
       <include file="$(find hector_quadrotor_gazebo)/launch/spawn_quadrotor.launch" >
         <arg name="name" value="quadrotor"/>
         <!-- <arg name="model" value="$(find jsk_mbzirc_tasks)/urdf/hawk.urdf.xacro"/> -->
-        <arg name="model" value="$(find hector_quadrotor_description)/urdf/quadrotor_downward_cam.gazebo.xacro"/>
+        <arg name="model" value="$(find hector_quadrotor_description)/urdf/quadrotor_with_asus_with_hokuyo_utm30lx.gazebo.xacro"/>
         <arg name="use_ground_truth_for_tf" value="true" />
         <arg name="use_ground_truth_for_control" value="true" />
         <arg name="x" value="$(arg x)"/>
