@@ -11,6 +11,7 @@ void IterativePlanner::onInit()
   private_nh.param("debug_mode", m_debug_mode, false);
   private_nh.param("landing_mode", m_landing_mode, false);
   private_nh.param("gazebo_mode", m_gazebo_mode, false);
+  private_nh.param("relative_traj_track_mode", m_relative_traj_track_mode, false);
 
   private_nh.param("resolution", m_octomap_res, 0.1);
   private_nh.param("tree_depth", m_octomap_tree_depth, 16);
@@ -661,7 +662,10 @@ void IterativePlanner::uavOdomCallback(const nav_msgs::OdometryConstPtr& msg)
     /* In case traj not being calculated before state changes to 3 */
     /* uav_arrive_gps_point_flag comes, then state changes could be enabled */
     if (m_uav.m_traj_first_updated && m_uav.m_uav_arrive_gps_point_flag){ // in case odom topic comes before first trajectory topic
-      m_uav.trackTrajectory();
+      if (m_relative_traj_track_mode)
+	m_uav.trackTrajectory();
+      else
+	m_uav.trackGlobalTrajectory();
       m_pub_uav_cmd.publish(m_uav.m_uav_cmd);
     }
   }

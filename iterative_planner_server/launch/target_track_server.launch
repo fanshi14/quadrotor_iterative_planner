@@ -18,6 +18,7 @@
     <param name="dji_mode" value="$(arg dji)" />
     <param name="landing_mode" value="$(arg landing)" />
     <param name="gazebo_mode" value="$(arg gazebo)" />
+    <param name="relative_traj_track_mode" value="false" />
     <param name="collision_detection" value="$(arg collision)" />
     <param name="route_id" value="$(arg route_id)" />
     <param name="resolution" value="0.2" />

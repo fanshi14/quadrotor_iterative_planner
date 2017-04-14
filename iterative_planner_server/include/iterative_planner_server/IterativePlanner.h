@@ -99,6 +99,7 @@ public:
   double m_uav_force_landing_vel;
   int m_uav_force_landing_method;
   double m_uav_force_landing_start_time;
+  bool m_relative_traj_track_mode;
 
   /* restricted region */
   bool m_restricted_region_mode;
