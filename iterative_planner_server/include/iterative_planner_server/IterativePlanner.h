@@ -42,7 +42,6 @@ public:
 
   /* Publisher */
   ros::Publisher m_pub_uav_cmd;
-  ros::Publisher m_pub_reconstructed_path_markers;
   ros::Publisher m_pub_estimated_target_odom;
 
 
@@ -142,7 +141,6 @@ public:
   void onIterativeSearching();
 
   /* visualization */
-  void controlPolygonDisplay(int mode);
   void vehicleCurrentPosVisualization(int vehicle_type);
 };
 

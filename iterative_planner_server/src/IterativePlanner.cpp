@@ -64,7 +64,6 @@ void IterativePlanner::onInit()
 
 
   /* Publisher */
-  m_pub_reconstructed_path_markers = m_nh.advertise<visualization_msgs::MarkerArray>("reconstructed_path_markers", 1);
   m_pub_uav_cmd  = m_nh.advertise<geometry_msgs::Twist>(m_uav_cmd_pub_topic_name, 1);
   m_pub_estimated_target_odom = m_nh.advertise<nav_msgs::Odometry>("truck_odom_estimated", 1);
 
@@ -76,7 +75,6 @@ void IterativePlanner::initIterativeSearching()
 {
   /* Clear previous vector data, marker, octree data */
   if (!m_control_point_vec.empty()){
-    controlPolygonDisplay(0);
     m_control_point_vec.clear();
   }
 
@@ -240,9 +238,6 @@ void IterativePlanner::runIterativeSearching()
   /* test: specific control points test */
   //controlPtsRandomSet();
 
-  /* publish control points */
-  controlPolygonDisplay(1);
-
   //ROS_INFO("Iterative searching is finished.");
 
   /* Print the value of control points */
@@ -269,7 +264,6 @@ void IterativePlanner::controlPtsRandomSet()
 {
   /* test: specific control points test */
   if (!m_control_point_vec.empty()){
-    controlPolygonDisplay(0);
     m_control_point_vec.clear();
   }
   m_segment_period_time = 1.0;
@@ -364,106 +358,6 @@ void IterativePlanner::targetTrajParamCallback(const quadrotor_trajectory::Track
       m_uav.m_target_traj = m_target_traj_base;
     }
   }
-}
-
-void IterativePlanner::controlPolygonDisplay(int mode){
-  int control_points_num = m_control_point_vec.size();
-  //std::cout << "[Display] Control points number: " << control_points_num << "\n";
-  int id_cnt = 0;
-  visualization_msgs::MarkerArray path_markers;
-  visualization_msgs::Marker control_point_marker, line_list_marker;
-  // line_array for display target ground truth future data, usually noted.
-  visualization_msgs::Marker line_array_target_gt_marker;
-  control_point_marker.ns = line_list_marker.ns = "control_polygon";
-  control_point_marker.header.frame_id = line_list_marker.header.frame_id = std::string("/world");
-  control_point_marker.header.stamp = line_list_marker.header.stamp = ros::Time().now();
-  if (mode == 1)
-    control_point_marker.action = line_list_marker.action = visualization_msgs::Marker::ADD;
-  else
-    control_point_marker.action = line_list_marker.action = visualization_msgs::Marker::DELETE;
-
-  line_array_target_gt_marker.header = line_list_marker.header;
-  line_array_target_gt_marker.action = line_list_marker.action;
-  line_array_target_gt_marker.ns = line_list_marker.ns;
-
-  control_point_marker.type = visualization_msgs::Marker::SPHERE;
-  line_list_marker.type = visualization_msgs::Marker::LINE_LIST;
-  line_array_target_gt_marker.type = visualization_msgs::Marker::LINE_STRIP;
-
-  line_list_marker.id = id_cnt;
-  ++id_cnt;
-  line_list_marker.scale.x = 0.1;
-  line_list_marker.color.r = 0.0;
-  line_list_marker.color.g = 1.0;
-  line_list_marker.color.b = 0.0;
-  line_list_marker.color.a = 1.0;
-  geometry_msgs::Point pt;
-  vector3dConvertToPoint(m_control_point_vec[0], pt);
-  line_list_marker.points.push_back(pt);
-  vector3dConvertToPoint(m_control_point_vec[1], pt);
-  line_list_marker.points.push_back(pt);
-  for (int i = 2; i < control_points_num; ++i){
-    vector3dConvertToPoint(m_control_point_vec[i-2], pt);
-    line_list_marker.points.push_back(pt);
-    vector3dConvertToPoint(m_control_point_vec[i], pt);
-    line_list_marker.points.push_back(pt);
-    vector3dConvertToPoint(m_control_point_vec[i-1], pt);
-    line_list_marker.points.push_back(pt);
-    vector3dConvertToPoint(m_control_point_vec[i], pt);
-    line_list_marker.points.push_back(pt);
-  }
-  path_markers.markers.push_back(line_list_marker);
-
-  for (int i = 0; i < control_points_num; ++i){
-    control_point_marker.id = id_cnt;
-    ++id_cnt;
-    control_point_marker.pose.position.x = m_control_point_vec[i].x();
-    control_point_marker.pose.position.y = m_control_point_vec[i].y();
-    control_point_marker.pose.position.z = m_control_point_vec[i].z();
-    control_point_marker.pose.orientation.x = 0.0;
-    control_point_marker.pose.orientation.y = 0.0;
-    control_point_marker.pose.orientation.z = 0.0;
-    control_point_marker.pose.orientation.w = 1.0;
-    if (i == 0 || i == control_points_num-1){
-      control_point_marker.scale.x = 1.0;
-      control_point_marker.scale.y = 1.0;
-      control_point_marker.scale.z = 1.0;
-      control_point_marker.color.a = 1;
-      control_point_marker.color.r = 0.0f;
-      control_point_marker.color.g = 1.0f;
-      control_point_marker.color.b = 0.0f;
-      path_markers.markers.push_back(control_point_marker);
-      continue;
-    }
-    else{
-      control_point_marker.scale.x = 0.5;
-      control_point_marker.scale.y = 0.5;
-      control_point_marker.scale.z = 0.5;
-      control_point_marker.color.a = 1;
-      control_point_marker.color.r = 0.0f;
-      control_point_marker.color.g = 1.0f;
-      control_point_marker.color.b = 0.0f;
-      path_markers.markers.push_back(control_point_marker);
-    }
-  }
-
-  /* Add elements in line strip */
-  // line_array_target_gt_marker.id = id_cnt;
-  // ++id_cnt;
-  // line_array_target_gt_marker.scale.x = 1.0;
-  // line_array_target_gt_marker.color.r = 1.0;
-  // line_array_target_gt_marker.color.g = 0.0;
-  // line_array_target_gt_marker.color.b = 0.0;
-  // line_array_target_gt_marker.color.a = 1.0;
-  // double sample_gap = 0.1;
-  // for (int i = 0; i < (int)(m_landing_time/sample_gap); ++i){
-  //   geometry_msgs::Point pt;
-  //   vector3dConvertToPoint(nOrderVehicleTrajectoryGroundTruth(0, sample_gap*i), pt);
-  //   line_array_target_gt_marker.points.push_back(pt);
-  // }
-  // path_markers.markers.push_back(line_array_target_gt_marker);
-
-  m_pub_reconstructed_path_markers.publish(path_markers);
 }
 
 bool IterativePlanner::isInsideBoarder(Vector3d query_point)
