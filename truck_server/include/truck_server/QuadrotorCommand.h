@@ -5,6 +5,7 @@
 /* ros */
 #include <ros/ros.h>
 #include <std_msgs/Header.h>
+#include <std_msgs/Empty.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Twist.h>
@@ -82,7 +83,11 @@ public:
   double m_traj_updated_time;
   VehicleTrajectoryBase m_truck_traj;
 
+  /* Publisher */
+  ros::Publisher m_pub_uav_gliding_mode;
+
   std::string m_uav_cmd_pub_topic_name;
+  std::string m_uav_gliding_mode_pub_topic_name;
 
   void onInit();
   void getTruckOdom(const nav_msgs::OdometryConstPtr& truck_odom_msg);

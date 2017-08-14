@@ -29,6 +29,10 @@ void QuadrotorCommand::onInit()
   private_nh.param("uav_force_landing_cnt_thresh", m_uav_force_landing_cnt_thresh, 5);
   private_nh.param("uav_force_landing_method", m_uav_force_landing_method, 1);
 
+  private_nh.param("uav_gliding_mode_pub_topic_name", m_uav_gliding_mode_pub_topic_name, std::string("/uav_start_gliding"));
+
+  m_pub_uav_gliding_mode = m_nh.advertise<std_msgs::Empty>(m_uav_gliding_mode_pub_topic_name, 1);
+
   m_traj_track_i_term_accumulation.setValue(0.0, 0.0, 0.0);
   m_uav_yaw_i_term_accumulation = 0.0;
   m_traj_updated = false;
@@ -175,6 +179,12 @@ void QuadrotorCommand::trackTrajectory()
           m_uav_cmd.linear.x = truck_des_uav_vel[0];
           m_uav_cmd.linear.y = truck_des_uav_vel[1];
           m_uav_cmd.linear.z = -1.5;
+          return;
+        }
+        else if (m_uav_force_landing_method == 3){ //method 3, gliding mode
+          /* start gliding mode: attitude control kepping body level and stably descending */
+          std_msgs::Empty msg;
+          m_pub_uav_gliding_mode.publish(msg);
           return;
         }
       }
